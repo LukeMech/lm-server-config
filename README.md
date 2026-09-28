@@ -97,7 +97,7 @@ each timer, and Cockpit > lm-server > *Automatic runs* shows what they did.
 
 Every service keeps all of its data in one folder,
 `/var/lib/lm-server/volumes/<service>/`. That's the Immich library and database,
-FileBrowser/Syncthing's `disk_0/` and `docs/`, the Guacamole DB, and so on. By
+the FileBrowser/Syncthing shares, the Guacamole DB, and so on. By
 default the folder is on the system disk. To use a different disk for a
 service, set `storage` in its section of `lm-server.toml`:
 
@@ -112,6 +112,19 @@ The service's data then lives in `<disk>/<service>/`, bind-mounted in place of
 its folder. If you change `storage` later, the next sync stops the service,
 copies its data to the new disk (only if the target is empty), and starts it
 again. The old copy is never deleted automatically.
+
+For `[disks]` that gives, with `shares = ["files", "docs"]`:
+
+```
+/var/mnt/hdd/disks/
+  shares/files/     FileBrowser source "files" (Syncthing: files/Keepass, files/Sync)
+  shares/docs/      FileBrowser source "docs"
+  app/syncthing/    Syncthing config + keys (device ID)
+  app/filebrowser/  FileBrowser database
+```
+
+Both containers see the shares as `/shares/<name>`; in `lm-server.toml` you
+only write `<share>/<folder>`.
 
 **What happens on a `storage` change** (e.g. `/var/mnt/hdd` → `/var/mnt/nvme`):
 1. The service is stopped.

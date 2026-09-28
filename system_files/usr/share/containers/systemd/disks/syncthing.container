@@ -8,9 +8,9 @@ Pod=disks.pod
 Image=docker.io/syncthing/syncthing:latest
 AutoUpdate=registry
 Environment=PUID=0 PGID=0 STGUIADDRESS=0.0.0.0:8384
-Volume=/var/lib/lm-server/volumes/disks/syncthing:/var/syncthing:Z
-Volume=/var/lib/lm-server/volumes/disks/disk_0:/mnt/disk_0:z
-Volume=/var/lib/lm-server/volumes/disks/docs:/mnt/docs:z
+Volume=/var/lib/lm-server/volumes/disks/app/syncthing:/var/syncthing:Z
+# The shares from `[disks] shares = [...]`: /shares/<name>.
+Volume=/var/lib/lm-server/volumes/disks/shares:/shares:z
 NoNewPrivileges=true
 
 [Service]

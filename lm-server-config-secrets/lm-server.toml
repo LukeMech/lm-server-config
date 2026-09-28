@@ -54,8 +54,12 @@ filebrowser_password = "CHANGE_ME"
 # syncdisks.lukemech.org (Syncthing GUI)
 syncthing_user = "admin"
 syncthing_password = "CHANGE_ME"
-# Created if missing; use the folder IDs your devices already share.
-syncthing_folders = { keepass = "/mnt/disk_0/Keepass", sync = "/mnt/disk_0/Sync" }
+# Shares: the top-level folders FileBrowser shows (default ["files"]). On the
+# disk: <storage>/disks/shares/<name>, next to the apps' own state in app/.
+shares = ["files", "docs"]
+# Syncthing folders as <share>/<path>; created if missing. Use the folder IDs
+# your devices already share.
+syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 # More FileBrowser users:
 # users = [ { login = "jan", password = "CHANGE_ME" } ]
 

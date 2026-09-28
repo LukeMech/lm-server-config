@@ -15,11 +15,16 @@ done
 st config gui user set "$(jq -r .user "${ST}")"
 st config gui password set "$(jq -r .password "${ST}")"
 
-# Folders: added only if missing. Sharing them with devices stays in the
-# Syncthing UI (or comes with the migrated config).
+# Folders: added if missing; an existing one (e.g. from a migrated config)
+# gets its path corrected. Sharing them with devices stays in the Syncthing UI.
 existing=$(st config folders list 2>/dev/null || true)
 while IFS=$'\t' read -r id path; do
-    grep -qxF "${id}" <<<"${existing}" && continue
+    if grep -qxF "${id}" <<<"${existing}"; then
+        [[ $(st config folders "${id}" path get 2>/dev/null) == "${path}" ]] && continue
+        st config folders "${id}" path set "${path}" &&
+            lms_log "disks: syncthing folder ${id} moved to ${path}"
+        continue
+    fi
     st config folders add --id "${id}" --label "$(basename "${path}")" --path "${path}" &&
         lms_log "disks: syncthing folder ${id} -> ${path} added"
 done < <(jq -r '.folders | to_entries[] | [.key, .value] | @tsv' "${ST}")
@@ -40,7 +45,7 @@ for ((i = 0; i < count; i++)); do
     podman run --rm --user 0:0 \
         -e FILEBROWSER_CONFIG=/home/filebrowser/config/config.yaml \
         -v "${ENVDIR}/filebrowser:/home/filebrowser/config:ro,Z" \
-        -v "${LMS_VOLUMES}/disks/filebrowser:/home/filebrowser/data:Z" \
+        -v "${LMS_VOLUMES}/disks/app/filebrowser:/home/filebrowser/data:Z" \
         --entrypoint ./filebrowser "${image}" \
         set -u "${login},${pass}" -c /home/filebrowser/config/config.yaml ||
         lms_log "disks: filebrowser user ${login} failed"

@@ -84,7 +84,7 @@ lvcreate -V 800G -T <VG>/<pool> -n lmdata
 
 mkfs.xfs -L lmdata /dev/<VG>/lmdata
 mkdir -p /mnt/lmdata && mount /dev/<VG>/lmdata /mnt/lmdata
-mkdir -p /mnt/lmdata/disks/{disk_0,docs,syncthing/config,filebrowser} \
+mkdir -p /mnt/lmdata/disks/{shares/files,shares/docs,app/syncthing/config,app/filebrowser} \
          /mnt/lmdata/immich/library /mnt/lmdata/_migration
 ```
 
@@ -99,8 +99,8 @@ what changed, so the downtime is minutes, not hours.
 ### First pass (services running)
 ```sh
 # on Proxmox -- CT 100 is unprivileged; the new containers run as root, so owners become root
-rsync -aH --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-0/ /mnt/lmdata/disks/disk_0/
-rsync -aH --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-1/ /mnt/lmdata/disks/docs/
+rsync -aH --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-0/ /mnt/lmdata/disks/shares/files/
+rsync -aH --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-1/ /mnt/lmdata/disks/shares/docs/
 
 # in VM 102 -- over the network to the host
 rsync -aH --info=progress2 "$UPLOAD_LOCATION"/ root@10.0.0.1:/mnt/lmdata/immich/library/
@@ -120,18 +120,21 @@ scp /tmp/immich-dump.sql.gz root@10.0.0.1:/mnt/lmdata/_migration/
 ```sh
 # on Proxmox: CT 100
 pct stop 100
-rsync -aH --delete --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-0/ /mnt/lmdata/disks/disk_0/
-rsync -aH --delete --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-1/ /mnt/lmdata/disks/docs/
+rsync -aH --delete --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-0/ /mnt/lmdata/disks/shares/files/
+rsync -aH --delete --info=progress2 --chown=0:0 /hdd-mirror/subvol-100-disk-1/ /mnt/lmdata/disks/shares/docs/
 pct mount 100
-rsync -a --chown=0:0 /var/lib/lxc/100/rootfs/<syncthing-config-dir>/ /mnt/lmdata/disks/syncthing/config/
-cp /var/lib/lxc/100/rootfs/<path>/database.db /mnt/lmdata/disks/filebrowser/database.db
+rsync -a --chown=0:0 /var/lib/lxc/100/rootfs/<syncthing-config-dir>/ /mnt/lmdata/disks/app/syncthing/config/
+cp /var/lib/lxc/100/rootfs/<path>/database.db /mnt/lmdata/disks/app/filebrowser/database.db
 pct unmount 100
 ```
 
 - **Syncthing**: copy the whole config directory, including `cert.pem` and
   `key.pem`. The new server then has the **same device ID** and your devices
-  reconnect by themselves. Folder paths (`/mnt/disk_0/Keepass`, `/mnt/disk_0/Sync`)
-  are the same inside the new container.
+  reconnect by themselves. The old folder paths (`/mnt/disk_0/Keepass`, ...)
+  are corrected to the new ones (`/shares/files/Keepass`) at the first sync, from
+  `syncthing_folders` in `lm-server.toml` -- keep the same folder IDs there.
+- **FileBrowser**: disk_0 is now the share `files`, docs is `docs`. If users in
+  the old database had their scope limited to a source, set it again in the UI.
 - **Immich**: keep the old `DB_PASSWORD` from `.env`. The dump overwrites the
   `postgres` password, so the new config must use the same one.
 

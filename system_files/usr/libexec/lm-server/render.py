@@ -254,12 +254,37 @@ def r_generic(name, spec, sec, out, ctx):
 
 
 def r_disks(name, spec, sec, out, ctx):
-    folders = sec.get("syncthing_folders", {"keepass": "/mnt/disk_0/Keepass", "sync": "/mnt/disk_0/Sync"})
-    for fid, path in folders.items():
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+", fid) or not re.fullmatch(r"/mnt/(disk_0|docs)(/[^\s]*)?", path):
-            raise ConfigError(f"{name}.syncthing_folders: '{fid}' -> '{path}' (path must be under /mnt/disk_0 or /mnt/docs, no spaces)")
+    # Shares: folders VOLUMES/disks/shares/<name>, at /shares/<name> in both
+    # containers. FileBrowser shows each one; Syncthing folders live in them.
+    shares = sec.get("shares", ["files"])
+    if not isinstance(shares, list) or not shares or len(set(shares)) != len(shares) or not all(
+        isinstance(s, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", s) and s not in (".", "..") for s in shares
+    ):
+        raise ConfigError(f'{name}.shares must be a list of distinct folder names, e.g. ["files", "docs"]')
+    folders = {}
+    for fid, rel in sec.get("syncthing_folders", {}).items():
+        parts = rel.split("/") if isinstance(rel, str) else []
+        if (
+            not re.fullmatch(r"[A-Za-z0-9_.-]+", fid)
+            or not parts
+            or parts[0] not in shares
+            or any(p in ("", ".", "..") or re.search(r"\s", p) for p in parts)
+        ):
+            raise ConfigError(
+                f"{name}.syncthing_folders: '{fid}' -> '{rel}' (must be <share>/<folder> with <share> one of "
+                f"{', '.join(shares)}; no spaces)"
+            )
+        folders[fid] = f"/shares/{rel}"
     admin = need(sec, "filebrowser_admin", name)
     q = json.dumps  # a JSON string is a valid YAML scalar
+    sources = "".join(
+        f"""    - path: {q("/shares/" + s)}
+      name: {q(s)}
+      config:
+        defaultEnabled: true
+"""
+        for s in shares
+    )
     out.write(
         "filebrowser/config.yaml",
         f"""server:
@@ -267,15 +292,7 @@ def r_disks(name, spec, sec, out, ctx):
   baseURL: "/"
   database: /home/filebrowser/data/database.db
   sources:
-    - path: /mnt/disk_0
-      name: disk_0
-      config:
-        defaultEnabled: true
-    - path: /mnt/docs
-      name: docs
-      config:
-        defaultEnabled: true
-auth:
+{sources}auth:
   adminUsername: {q(admin)}
   adminPassword: {q(need(sec, "filebrowser_password", name))}
   methods:
@@ -290,7 +307,7 @@ frontend:
         "syncthing.json",
         {"user": need(sec, "syncthing_user", name), "password": need(sec, "syncthing_password", name), "folders": folders},
     )
-    volumes(out, *(p[len("/mnt/"):] for p in folders.values()))
+    volumes(out, *(f"shares/{s}" for s in shares), *(p[1:] for p in folders.values()))
 
 
 def r_immich(name, spec, sec, out, ctx):
