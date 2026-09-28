@@ -29,4 +29,6 @@ NoNewPrivileges=true
 [Service]
 Slice=lm-server-toolbox.slice
 Restart=always
+# A failed clone (e.g. no access to APP_REPO) retries slowly, not in a loop.
+RestartSec=15
 TimeoutStartSec=900

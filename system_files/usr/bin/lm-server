@@ -73,10 +73,16 @@ cmd_setup() {
         return
     fi
 
-    local tmo=()
-    ((firstboot)) && tmo=(-t 900)
-    local attempt
-    for attempt in 1 2 3; do
+    # First boot: no one can log in until the admin from lm-server.toml
+    # exists, so there is no skip or timeout -- ask until it works.
+    ((firstboot)) && quiet_console
+    local attempt=0
+    while :; do
+        attempt=$((attempt + 1))
+        if ((!firstboot && attempt > 3)); then
+            lms_log "setup failed -- run: sudo lm-server setup"
+            return 1
+        fi
         clear 2>/dev/null || true
         cat <<EOF
 
@@ -90,15 +96,16 @@ cmd_setup() {
   repository access: the secrets repo (+ private website repos),
   permission "Contents: Read-only".
 
-  Type "skip" as the repo to do this later (sudo lm-server setup, or Cockpit > lm-server).
+  The admin login comes from lm-server.toml, so this has to succeed
+  before anyone can sign in.
 
 EOF
-        read -r "${tmo[@]}" -p "  Secrets repo (owner/name) [${def_repo}]: " repo || {
+        read -r -p "  Secrets repo (owner/name) [${def_repo}]: " repo || {
+            # No terminal to ask on (stdin closed).
             echo
-            lms_log "no answer -- skipping setup (run: sudo lm-server setup)"
-            return 0
+            lms_log "no answer -- run: sudo lm-server setup"
+            return 1
         }
-        [[ ${repo} == skip ]] && return 0
         repo=${repo:-${def_repo}}
         read -r -p "  Branch [${def_branch}]: " branch || true
         branch=${branch:-${def_branch}}
@@ -107,16 +114,35 @@ EOF
         [[ ${subdir} == / ]] && subdir=""
         read -r -p "  GitHub username [${def_user}]: " user || true
         user=${user:-${def_user}}
-        read -r -s -p "  GitHub token (empty for a public repo): " token || true
-        echo
+        # Shown while typing: a 90-character token is hard to enter blind.
+        read -r -p "  GitHub token (empty for a public repo): " token || true
+        ((firstboot)) && clear 2>/dev/null || true # don't leave it on the console
         if setup_save "${repo}" "${branch}" "${subdir}" "${user}" "${token}"; then
             return 0
         fi
-        echo "  Try again (${attempt}/3)."
-        sleep 2
+        if ((firstboot)); then
+            read -r -p "  Press Enter to try again. " _ || true
+        else
+            echo "  Try again (${attempt}/3)."
+            sleep 2
+        fi
     done
-    lms_log "setup failed -- run: sudo lm-server setup"
-    return 1
+}
+
+# quiet_console: let the boot finish printing, then keep systemd status lines
+# and kernel/journald messages off the console so they don't cover the prompt.
+quiet_console() {
+    local i
+    # Wait (up to 60 s) until no other job is running -- the units that wait
+    # on this one (getty, multi-user.target) sit in "waiting".
+    for ((i = 0; i < 60; i++)); do
+        systemctl list-jobs --no-legend --plain 2>/dev/null |
+            awk '$4 == "running" && $2 != "lm-server-firstboot.service"' |
+            grep -q . || break
+        sleep 1
+    done
+    kill -s RTMIN+21 1 2>/dev/null || true # systemd: stop status output on the console
+    dmesg -n 1 2>/dev/null || true         # kernel: only emergencies on the console
 }
 
 # setup_save <repo> <branch> <subdir> <user> <token>: validates access, then writes.

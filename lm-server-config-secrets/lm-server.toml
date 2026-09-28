@@ -11,8 +11,9 @@
 hostname = "lm-server"
 timezone = "Europe/Warsaw"
 # Admin for Cockpit + sudo. Hash: openssl passwd -6 'your-password'
-admin_user = "lukasz"
-admin_password_hash = "CHANGE_ME"
+# TEST ONLY: test / test -- change both before real use.
+admin_user = "test"
+admin_password_hash = "$6$KnNeMjlXNDBbXnch$Jul2ilhYlZBYSWsKRHncxe0etD2PrYf9ZlgmtlztifGL0uyCXvvCKYGBOpBwOMVXWzYnpYlnzT/bOAUqHtd5S0"
 ssh_keys = [
     # "ssh-ed25519 AAAA... you@laptop",
 ]
