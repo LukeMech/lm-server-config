@@ -1,0 +1,11 @@
+# One unit for the whole service: `systemctl restart sugar-pod` (or
+# `lm-server restart sugar`) stops/starts every container below together.
+# Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
+[Unit]
+Description=sugar: Nightscout
+ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
+
+[Pod]
+PodName=sugar
+Network=sugar.network
+PublishPort=127.0.0.1:1337:1337

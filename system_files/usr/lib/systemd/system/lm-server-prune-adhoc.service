@@ -1,0 +1,14 @@
+[Unit]
+Description=lm-server: drop ad-hoc containers (not defined by a quadlet in the image)
+# Containers created by hand (Cockpit > Podman, `podman run`) are throwaway:
+# they're removed at every boot, i.e. also after every system upgrade.
+# Disable with ADHOC_EPHEMERAL=false in host/host.env.
+After=podman.socket local-fs.target
+Before=lm-server-services.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lm-server/prune-adhoc.sh
+
+[Install]
+WantedBy=multi-user.target

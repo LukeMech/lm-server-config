@@ -1,0 +1,9 @@
+[Unit]
+Description=lm-server: pull configs from the secrets repo and apply them
+Wants=network-online.target
+After=network-online.target lm-server-services.service
+ConditionPathExists=/var/lib/lm-server/secrets.env
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/lm-server sync

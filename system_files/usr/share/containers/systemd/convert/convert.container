@@ -1,0 +1,17 @@
+[Unit]
+Description=convert: convert
+ConditionPathExists=/var/lib/lm-server/env/convert/enabled
+
+[Container]
+ContainerName=convert
+Image=ghcr.io/c4illin/convertx:latest
+AutoUpdate=registry
+Network=convert.network
+PublishPort=127.0.0.1:3001:3000
+EnvironmentFile=/var/lib/lm-server/env/convert/convertx.env
+Volume=/var/lib/lm-server/data/convert:/app/data:Z
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900

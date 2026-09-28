@@ -1,0 +1,3 @@
+# Own network: containers of other services can't reach this one.
+[Network]
+NetworkName=lm-server-website

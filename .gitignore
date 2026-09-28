@@ -1,0 +1,24 @@
+# Local build output (Justfile `clean`)
+output/
+_build*/
+*_chunkah_*/
+changelog.md
+
+# Disk images are build artifacts, published on GitHub releases
+*.iso
+*.qcow2
+*.raw
+*.img
+
+# cosign private key -- only the .pub belongs in this repo
+cosign.key
+
+# lm-server-config-secrets/ here is the public TEMPLATE (placeholders only).
+# Real values live in the private lm-server-config-secrets repo -- never commit them here.
+
+# Editor/OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+__pycache__/

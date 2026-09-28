@@ -1,0 +1,8 @@
+[Unit]
+Description=lm-server: provision users of %i (logins/passwords from the secrets repo)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lm-server/provision/%i.sh
+TimeoutStartSec=30min

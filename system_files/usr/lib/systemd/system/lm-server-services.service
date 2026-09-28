@@ -1,0 +1,15 @@
+[Unit]
+Description=lm-server: start every service enabled by the last applied config
+# Starts from the configs already on disk -- no network needed, so services
+# come up at boot even if GitHub is unreachable.
+After=network-online.target lm-server-prune-adhoc.service
+Wants=network-online.target
+ConditionPathExists=/var/lib/lm-server/secrets.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/lm-server start-enabled
+
+[Install]
+WantedBy=multi-user.target

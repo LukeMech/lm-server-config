@@ -1,0 +1,17 @@
+{
+    "version": 0,
+    "require": {
+        "cockpit": "300"
+    },
+    "menu": {
+        "index": {
+            "label": "lm-server",
+            "order": 1,
+            "keywords": [
+                {
+                    "matches": ["update", "upgrade", "bootc", "containers", "services", "secrets"]
+                }
+            ]
+        }
+    }
+}

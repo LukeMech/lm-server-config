@@ -1,0 +1,9 @@
+# Makes every install path record the origin as ostree-image-signed, not
+# ostree-unverified-registry, so sigstoreSigned is consulted on upgrade, not skipped.
+#
+# Requires policy.json's top-level "default" to not be insecureAcceptAnything -- bootc
+# refuses to honor this flag otherwise ("refusing usage"), hence "reject" with overrides.
+#
+# https://bootc.dev/bootc/man/bootc-install-config.5.html
+[install]
+enforce-container-sigpolicy = true

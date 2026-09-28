@@ -1,0 +1,72 @@
+# lm-server -- the whole server config in one file.
+#
+# TEMPLATE: copy into the private lm-server-config-secrets repo and replace every
+# CHANGE_ME. A service runs only if its [section] is present; delete a section
+# to stop that service. A section that still has CHANGE_ME (or misses a
+# required key) is not started -- `lm-server sync` / Cockpit says what's wrong.
+# Changes are picked up within 5 minutes; only changed services restart.
+
+[host]
+hostname = "lm-server"
+timezone = "Europe/Warsaw"
+# Admin for Cockpit + sudo. Hash: openssl passwd -6 'your-password'
+admin_user = "lukasz"
+admin_password_hash = "CHANGE_ME"
+ssh_keys = [
+    # "ssh-ed25519 AAAA... you@laptop",
+]
+# Public address of Cockpit behind the Cloudflare Tunnel.
+cockpit_origins = ["https://proxmox.lukemech.org"]
+
+[updates]
+# When to install a new system image automatically (reboots!), or "manual".
+# systemd calendar syntax: "daily", "Sun 04:00", "*-*-01 03:00".
+system = "manual"
+# When to pull newer container images (restarts only what changed), or "manual".
+containers = "daily"
+# Remove containers created by hand (Cockpit/podman run) at every boot.
+adhoc_ephemeral = true
+
+# ------------------------------------------------------------------ services
+
+[cloudflared]
+# Zero Trust > Networks > Tunnels > your tunnel > token.
+tunnel_token = "CHANGE_ME"
+
+[disks]
+# disk.lukemech.org (FileBrowser Quantum)
+filebrowser_admin = "admin"
+filebrowser_password = "CHANGE_ME"
+# syncdisks.lukemech.org (Syncthing GUI)
+syncthing_user = "admin"
+syncthing_password = "CHANGE_ME"
+# Created if missing; use the folder IDs your devices already share.
+syncthing_folders = { keepass = "/mnt/disk_0/Keepass", sync = "/mnt/disk_0/Sync" }
+# More FileBrowser users:
+# users = [ { login = "jan", password = "CHANGE_ME" } ]
+
+# Web apps: repo/port are built in; the code is cloned with the GitHub token
+# from `lm-server setup`. Optional: branch = "...", github_token = "...".
+[toolbox]
+[website]
+[exp]
+
+[convert]
+jwt_secret = "CHANGE_ME"
+users = [{ email = "you@example.com", password = "CHANGE_ME" }]
+# Any ConvertX setting: env = { AUTO_DELETE_EVERY_N_HOURS = "24" }
+
+[immich]
+db_password = "CHANGE_ME" # letters and digits only
+admin = { email = "you@example.com", password = "CHANGE_ME", name = "Admin" }
+# users = [ { email = "family@example.com", password = "CHANGE_ME", name = "Family" } ]
+env = { TZ = "Europe/Warsaw" }
+
+[remote]
+db_password = "CHANGE_ME"
+# An admin disables the default guacadmin account.
+users = [{ login = "lukasz", password = "CHANGE_ME", admin = true }]
+
+[sugar]
+api_secret = "CHANGE_ME" # min. 12 characters
+env = { DISPLAY_UNITS = "mg/dl", ENABLE = "careportal basal iob cob bridge", AUTH_DEFAULT_ROLES = "denied", TZ = "Europe/Warsaw" }

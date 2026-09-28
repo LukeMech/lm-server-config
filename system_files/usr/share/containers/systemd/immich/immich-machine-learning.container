@@ -1,0 +1,19 @@
+[Unit]
+Description=immich: immich-machine-learning
+ConditionPathExists=/var/lib/lm-server/env/immich/enabled
+
+[Container]
+ContainerName=immich-machine-learning
+Pod=immich.pod
+Image=ghcr.io/immich-app/immich-machine-learning:release
+AutoUpdate=registry
+EnvironmentFile=/var/lib/lm-server/env/immich/server.env
+Volume=/var/lib/lm-server/data/immich/model-cache:/cache:Z
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=immich-pod.service

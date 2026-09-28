@@ -1,0 +1,13 @@
+# One unit for the whole service: `systemctl restart immich-pod` (or
+# `lm-server restart immich`) stops/starts every container below together.
+# Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
+[Unit]
+Description=immich: Immich
+ConditionPathExists=/var/lib/lm-server/env/immich/enabled
+# Wait for the data disk if one is mounted there (Cockpit > Storage).
+RequiresMountsFor=/var/mnt/data
+
+[Pod]
+PodName=immich
+Network=immich.network
+PublishPort=127.0.0.1:2283:2283

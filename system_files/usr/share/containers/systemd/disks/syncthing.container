@@ -1,0 +1,21 @@
+[Unit]
+Description=disks: syncthing
+ConditionPathExists=/var/lib/lm-server/env/disks/enabled
+
+[Container]
+ContainerName=syncthing
+Pod=disks.pod
+Image=docker.io/syncthing/syncthing:latest
+AutoUpdate=registry
+Environment=PUID=0 PGID=0 STGUIADDRESS=0.0.0.0:8384
+Volume=/var/lib/lm-server/data/disks/syncthing:/var/syncthing:Z
+Volume=/var/mnt/data/disk_0:/mnt/disk_0:z
+Volume=/var/mnt/data/docs:/mnt/docs:z
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=disks-pod.service

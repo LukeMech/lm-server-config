@@ -1,0 +1,5 @@
+# Pairs with policy.json's sigstoreSigned requirement -- build.yml's cosign signature
+# is a digest-derived tag alongside the image, not a lookaside server; this tells podman.
+docker:
+  ghcr.io/lukemech:
+    use-sigstore-attachments: true

@@ -1,0 +1,5 @@
+# qcow2/raw for testing the system in a VM (`just build-qcow2`, `just run-vm`).
+# Root filesystem type comes from the image (00-root-filesystem.toml).
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "40 GiB"

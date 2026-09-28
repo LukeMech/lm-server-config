@@ -1,0 +1,5 @@
+# Force LF everywhere -- developed on Windows, but every script runs on Linux
+# (container builds, GitHub Actions, the server). CRLF breaks shebang scripts.
+* text=auto eol=lf
+
+*.pub binary

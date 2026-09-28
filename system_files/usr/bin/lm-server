@@ -1,0 +1,374 @@
+#!/bin/bash
+# lm-server -- manage this lm-server host: configs, services, updates.
+set -euo pipefail
+
+# shellcheck source=../libexec/lm-server/lib.sh
+. /usr/libexec/lm-server/lib.sh
+
+usage() {
+    cat <<'EOF'
+usage: lm-server <command> [args]
+
+System (bootc image from ghcr.io/lukemech/lm-server)
+  status                 system image, config revision, services, schedules
+  history [N]            last N lines of automatic updates/syncs
+  upgrade [--check]      download the next system image (applied on reboot)
+  upgrade --apply        download it and reboot into it now
+  rollback               boot the previous system image on next reboot
+
+Containers (updated independently of the system)
+  update [--dry-run]     pull newer container images and restart what changed
+
+Configs (private lm-server-config-secrets repo)
+  setup                  (re)enter the GitHub repo + credentials
+  sync [--force]         pull configs and apply them now
+
+Services
+  services               list services and their state
+  start|stop|restart <service>
+  logs <service> [-f]
+  routes                 Cloudflare Tunnel routes this host expects
+  prune-adhoc            remove containers not defined by this image
+EOF
+}
+
+need_root() {
+    [[ ${EUID} -eq 0 ]] || exec sudo -- "$0" "$@"
+}
+
+# ------------------------------------------------------------------ setup
+
+cmd_setup() {
+    local firstboot=0 repo="" branch="" subdir="" user="" token="" token_stdin=0
+    while (($#)); do
+        case $1 in
+        --firstboot) firstboot=1 ;;
+        --repo) repo=$2 && shift ;;
+        --branch) branch=$2 && shift ;;
+        --subdir) subdir=$2 && shift ;;
+        --user) user=$2 && shift ;;
+        --token-stdin) token_stdin=1 ;;
+        *) lms_die "setup: unknown argument $1" ;;
+        esac
+        shift
+    done
+
+    if ((firstboot)) && [[ -f ${LMS_SECRETS_ENV} ]]; then
+        exit 0
+    fi
+
+    lms_load_secrets || true
+    local def_repo=${LMS_S[REPO]:-${LMS_DEFAULT_REPO}}
+    local def_branch=${LMS_S[BRANCH]:-main}
+    local def_subdir=${LMS_S[SUBDIR]:-}
+    local def_user=${LMS_S[GITHUB_USER]:-}
+
+    if ((token_stdin)); then
+        # Non-interactive (Cockpit): everything from args, token from stdin.
+        IFS= read -r token || true
+        repo=${repo:-${def_repo}} branch=${branch:-${def_branch}}
+        setup_save "${repo}" "${branch}" "${subdir}" "${user}" "${token}"
+        return
+    fi
+
+    local tmo=()
+    ((firstboot)) && tmo=(-t 900)
+    local attempt
+    for attempt in 1 2 3; do
+        clear 2>/dev/null || true
+        cat <<EOF
+
+  ================= lm-server: first configuration =================
+
+  Service configs, logins and passwords are pulled from a private GitHub
+  repo (template: lm-server-config-secrets/ in LukeMech/lm-server-config).
+
+  GitHub no longer accepts account passwords for git -- use a token:
+  github.com > Settings > Developer settings > Fine-grained tokens,
+  repository access: the secrets repo (+ private website repos),
+  permission "Contents: Read-only".
+
+  Type "skip" as the repo to do this later (sudo lm-server setup, or Cockpit > lm-server).
+
+EOF
+        read -r "${tmo[@]}" -p "  Secrets repo (owner/name) [${def_repo}]: " repo || {
+            echo
+            lms_log "no answer -- skipping setup (run: sudo lm-server setup)"
+            return 0
+        }
+        [[ ${repo} == skip ]] && return 0
+        repo=${repo:-${def_repo}}
+        read -r -p "  Branch [${def_branch}]: " branch || true
+        branch=${branch:-${def_branch}}
+        read -r -p "  Folder with lm-server.toml inside the repo [${def_subdir:-/}]: " subdir || true
+        subdir=${subdir:-${def_subdir}}
+        [[ ${subdir} == / ]] && subdir=""
+        read -r -p "  GitHub username [${def_user}]: " user || true
+        user=${user:-${def_user}}
+        read -r -s -p "  GitHub token (empty for a public repo): " token || true
+        echo
+        if setup_save "${repo}" "${branch}" "${subdir}" "${user}" "${token}"; then
+            return 0
+        fi
+        echo "  Try again (${attempt}/3)."
+        sleep 2
+    done
+    lms_log "setup failed -- run: sudo lm-server setup"
+    return 1
+}
+
+# setup_save <repo> <branch> <subdir> <user> <token>: validates access, then writes.
+setup_save() {
+    local repo=$1 branch=$2 subdir=$3 user=$4 token=$5
+    [[ ${repo} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+        lms_log "repo must look like owner/name"
+        return 1
+    }
+    lms_log "checking access to github.com/${repo} (${branch})..."
+    if ! LMS_GIT_USER=${user} LMS_GIT_TOKEN=${token} lms_git ls-remote --exit-code \
+        "https://github.com/${repo}.git" "refs/heads/${branch}" >/dev/null; then
+        lms_log "cannot read ${repo}@${branch} with these credentials"
+        return 1
+    fi
+    local tmp
+    tmp=$(mktemp "${LMS_STATE}/.secrets.XXXXXX")
+    chmod 0600 "${tmp}"
+    {
+        lms_env_line REPO "${repo}"
+        lms_env_line BRANCH "${branch}"
+        lms_env_line SUBDIR "${subdir}"
+        lms_env_line GITHUB_USER "${user}"
+        lms_env_line GITHUB_TOKEN "${token}"
+    } >"${tmp}"
+    mv -f "${tmp}" "${LMS_SECRETS_ENV}"
+    lms_log "saved -- pulling configs and starting services"
+    systemctl start --no-block lm-server-prune-adhoc.service lm-server-services.service || true
+    cmd_sync --force
+}
+
+# ------------------------------------------------------------------ sync
+
+cmd_sync() {
+    local force=0
+    [[ ${1:-} == --force ]] && force=1
+    lms_load_secrets || {
+        lms_log "not configured yet -- run: sudo lm-server setup"
+        return 0
+    }
+    exec 9>/run/lm-server-sync.lock
+    flock -n 9 || {
+        lms_log "a sync is already running"
+        return 0
+    }
+
+    local repo=${LMS_S[REPO]} branch=${LMS_S[BRANCH]:-main} subdir=${LMS_S[SUBDIR]:-}
+    local url="https://github.com/${repo}.git"
+    if [[ -d ${LMS_REPO_DIR}/.git && $(git -C "${LMS_REPO_DIR}" remote get-url origin 2>/dev/null) == "${url}" ]]; then
+        lms_git -C "${LMS_REPO_DIR}" fetch -q --depth 1 origin "${branch}"
+        git -C "${LMS_REPO_DIR}" reset -q --hard FETCH_HEAD
+    else
+        rm -rf "${LMS_REPO_DIR}"
+        lms_git clone -q --depth 1 --branch "${branch}" "${url}" "${LMS_REPO_DIR}"
+    fi
+
+    local conf="${LMS_REPO_DIR}/${subdir#/}"
+    conf="${conf%/}/${LMS_CONFIG_FILE}"
+    [[ -f ${conf} ]] || lms_die "no ${LMS_CONFIG_FILE} in ${repo}${subdir:+/${subdir}}"
+
+    # Render everything into a scratch dir, then swap in per service.
+    local new="${LMS_ENV}/.new" rc=0
+    rm -rf "${new}"
+    mkdir -m 0700 "${new}"
+    LMS_GITHUB_TOKEN=${LMS_S[GITHUB_TOKEN]:-} LMS_GITHUB_USER=${LMS_S[GITHUB_USER]:-} \
+        "${LMS_RENDER}" render "${conf}" "${new}" || rc=$?
+    ((rc < 2)) || lms_die "${LMS_CONFIG_FILE} could not be read"
+
+    rm -rf "${LMS_ENV}/host"
+    mv "${new}/host" "${LMS_ENV}/host"
+    "${LMS_LIBEXEC}/apply-host.sh" || lms_log "warning: host settings not fully applied"
+
+    local svc failed=0
+    for svc in $(lms_services); do
+        if [[ -f ${new}/.errors/${svc} ]]; then
+            lms_log "${svc}: $(cat "${new}/.errors/${svc}") -- keeping the previous config"
+            failed=1
+            continue
+        fi
+        apply_service "${svc}" "${new}/${svc}" "${force}"
+    done
+    rm -rf "${new}"
+
+    git -C "${LMS_REPO_DIR}" rev-parse HEAD >"${LMS_STATE}/config.rev"
+    date -Is >"${LMS_STATE}/config.synced"
+    return "${failed}"
+}
+
+# apply_service <svc> <rendered-dir> <force>: swaps in the new config and
+# (re)starts the service only if its rendered files changed.
+apply_service() {
+    local svc=$1 src=$2 force=$3 dst="${LMS_ENV}/$1"
+    local -a units
+    mapfile -t units < <(lms_units "${svc}")
+
+    if [[ ! -d ${src} ]]; then
+        if lms_enabled "${svc}"; then
+            lms_log "${svc}: removed from ${LMS_CONFIG_FILE} -- stopping"
+            systemctl stop "${units[@]}" || true
+            rm -f "${dst}/enabled"
+        fi
+        return 0
+    fi
+    if ((!force)) && lms_enabled "${svc}" && [[ $(lms_dir_hash "${src}") == "$(lms_dir_hash "${dst}")" ]]; then
+        return 0
+    fi
+
+    rm -rf "${dst}"
+    mv "${src}" "${dst}"
+    touch "${dst}/enabled"
+    lms_log "${svc}: config applied -- (re)starting"
+    systemctl reset-failed "${units[@]}" 2>/dev/null || true
+    systemctl restart --no-block "${units[@]}"
+    if [[ -x ${LMS_LIBEXEC}/provision/${svc}.sh ]]; then
+        systemctl restart --no-block "lm-server-provision@${svc}.service"
+    fi
+}
+
+cmd_start_enabled() {
+    local svc
+    for svc in $(lms_services); do
+        lms_enabled "${svc}" || continue
+        mapfile -t units < <(lms_units "${svc}")
+        systemctl start --no-block "${units[@]}"
+    done
+}
+
+# ------------------------------------------------------------------ services
+
+svc_arg() {
+    [[ -n ${1:-} ]] || lms_die "missing service name (see: lm-server services)"
+    lms_service_exists "$1" || lms_die "unknown service: $1"
+}
+
+cmd_services() {
+    local name units routes desc u state line
+    printf '%-12s %-8s %s\n' SERVICE CONFIG STATE
+    while IFS=$'\t' read -r name units routes desc; do
+        line=""
+        for u in ${units}; do
+            state=$(systemctl is-active "${u}.service" 2>/dev/null || true)
+            line+="${state} "
+        done
+        if lms_enabled "${name}"; then state=yes; else state=-; fi
+        printf '%-12s %-8s %-10s %s\n' "${name}" "${state}" "${line% }" "${desc}"
+    done < <(lms_catalog)
+}
+
+cmd_unit_action() {
+    local action=$1 svc=${2:-}
+    svc_arg "${svc}"
+    mapfile -t units < <(lms_units "${svc}")
+    if [[ ${action} != stop ]] && ! lms_enabled "${svc}"; then
+        lms_die "${svc} has no config (add [${svc}] to ${LMS_CONFIG_FILE})"
+    fi
+    systemctl "${action}" "${units[@]}"
+}
+
+# Logs of every container of a service (a pod's containers are separate units).
+cmd_logs() {
+    local svc=${1:-} u
+    svc_arg "${svc}"
+    shift
+    local args=()
+    for u in $(lms_units "${svc}"); do args+=(-u "${u}"); done
+    for u in $(podman ps -a --filter "pod=${svc}" --format '{{.Names}}' 2>/dev/null); do
+        args+=(-u "${u}.service")
+    done
+    journalctl -n 200 "${args[@]}" "$@"
+}
+
+cmd_routes() {
+    local name units routes desc r
+    printf '%-28s %s\n' HOSTNAME SERVICE
+    while IFS=$'\t' read -r name units routes desc; do
+        for r in ${routes}; do
+            printf '%-28s %s\n' "${r%%=*}" "${r#*=}"
+        done
+    done < <(lms_catalog)
+    echo
+    echo "https://localhost:9090 (Cockpit) needs TLS verification disabled on the route."
+}
+
+# ------------------------------------------------------------------ status/updates
+
+cmd_status() {
+    echo "== System image"
+    bootc status --format=humanreadable 2>/dev/null || bootc status || true
+    echo
+    echo "== Configs"
+    if lms_load_secrets; then
+        echo "repo:   ${LMS_S[REPO]}@${LMS_S[BRANCH]:-main}${LMS_S[SUBDIR]:+ (${LMS_S[SUBDIR]})}"
+        echo "commit: $(cat "${LMS_STATE}/config.rev" 2>/dev/null || echo -)"
+        echo "synced: $(cat "${LMS_STATE}/config.synced" 2>/dev/null || echo never)"
+    else
+        echo "not configured -- run: sudo lm-server setup"
+    fi
+    echo
+    echo "== Services"
+    cmd_services
+    echo
+    echo "== Schedules"
+    systemctl list-timers --all --no-pager podman-auto-update.timer lm-server-upgrade.timer lm-server-sync.timer 2>/dev/null |
+        sed '/^$/,$d'
+}
+
+# What the automatic jobs did lately (container updates, system upgrades, syncs).
+cmd_history() {
+    journalctl --no-pager -o short-iso -n "${1:-100}" \
+        -u podman-auto-update.service -u lm-server-upgrade.service -u lm-server-sync.service
+}
+
+cmd_upgrade() {
+    case ${1:-} in
+    --check) bootc upgrade --check ;;
+    --apply) bootc upgrade --apply ;;
+    "") bootc upgrade && echo "Staged -- reboot (or run: lm-server upgrade --apply) to switch to it." ;;
+    *) lms_die "upgrade: unknown argument $1" ;;
+    esac
+}
+
+cmd_update() {
+    case ${1:-} in
+    --dry-run | --check) podman auto-update --dry-run ;;
+    "") podman auto-update ;;
+    *) lms_die "update: unknown argument $1" ;;
+    esac
+}
+
+# ------------------------------------------------------------------ main
+
+cmd=${1:-}
+[[ -n ${cmd} ]] || {
+    usage
+    exit 1
+}
+shift
+case ${cmd} in
+-h | --help | help) usage ;;
+routes) cmd_routes ;;
+services) cmd_services ;;
+status) need_root status "$@" && cmd_status ;;
+history) need_root history "$@" && cmd_history "$@" ;;
+setup) need_root setup "$@" && cmd_setup "$@" ;;
+sync) need_root sync "$@" && cmd_sync "$@" ;;
+start-enabled) need_root start-enabled && cmd_start_enabled ;;
+start | stop | restart) need_root "${cmd}" "$@" && cmd_unit_action "${cmd}" "$@" ;;
+logs) need_root logs "$@" && cmd_logs "$@" ;;
+upgrade) need_root upgrade "$@" && cmd_upgrade "$@" ;;
+rollback) need_root rollback && bootc rollback ;;
+update) need_root update "$@" && cmd_update "$@" ;;
+prune-adhoc) need_root prune-adhoc && "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
+*)
+    usage
+    exit 1
+    ;;
+esac

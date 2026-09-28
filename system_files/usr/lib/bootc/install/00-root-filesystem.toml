@@ -1,0 +1,5 @@
+# Default root filesystem for `bootc install` / bootc-image-builder (the
+# Anaconda ISO lets you partition manually anyway).
+# https://bootc.dev/bootc/man/bootc-install-config.5.html
+[install.filesystem.root]
+type = "xfs"

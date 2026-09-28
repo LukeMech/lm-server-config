@@ -1,0 +1,23 @@
+[Unit]
+Description=toolbox: toolbox
+ConditionPathExists=/var/lib/lm-server/env/toolbox/enabled
+
+[Container]
+ContainerName=toolbox
+# Site code is cloned at start from APP_REPO (see images/webapp).
+Image=ghcr.io/lukemech/lm-server-webapp:latest
+AutoUpdate=registry
+Network=toolbox.network
+PublishPort=127.0.0.1:6600:6600
+EnvironmentFile=/var/lib/lm-server/env/toolbox/app.env
+# Own user namespace: root in here is an unprivileged uid on the host.
+UserNS=auto
+Volume=/var/lib/lm-server/data/toolbox:/data:Z,U
+ReadOnly=true
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900

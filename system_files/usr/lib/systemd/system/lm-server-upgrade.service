@@ -1,0 +1,8 @@
+[Unit]
+Description=lm-server: upgrade the system image (bootc) and reboot into it
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/lm-server upgrade --apply

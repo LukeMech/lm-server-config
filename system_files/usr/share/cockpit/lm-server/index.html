@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>lm-server</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="lm-server.css">
+    <script src="../base1/cockpit.js"></script>
+    <script src="lm-server.js" defer></script>
+</head>
+<body>
+    <main>
+        <section class="card" data-log>
+            <header>
+                <h2>System</h2>
+                <div class="actions">
+                    <button data-run="upgrade --check">Check for update</button>
+                    <button data-run="upgrade">Download update</button>
+                    <button class="primary" data-run="upgrade --apply" data-confirm="Download the new system image and reboot now?">Update &amp; reboot</button>
+                    <button data-run="rollback" data-confirm="Boot the previous system image on the next reboot?">Rollback</button>
+                </div>
+            </header>
+            <p class="hint">Whole-system image <code>ghcr.io/lukemech/lm-server</code>: an update applies on reboot and the previous image stays available for rollback.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
+        <section class="card" data-log>
+            <header>
+                <h2>Containers</h2>
+                <div class="actions">
+                    <button data-run="update --dry-run">Check for updates</button>
+                    <button class="primary" data-run="update">Update containers</button>
+                    <button data-run="prune-adhoc" data-confirm="Remove every container not defined by the system image?">Remove ad-hoc containers</button>
+                </div>
+            </header>
+            <p class="hint">Pulls newer images of every service and restarts only what changed. A service that fails to come back is rolled back to its previous image.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
+        <section class="card" data-log>
+            <header>
+                <h2>Status</h2>
+                <div class="actions">
+                    <button data-run="status" data-auto>Refresh</button>
+                    <button class="primary" data-run="sync --force">Sync configs</button>
+                </div>
+            </header>
+            <pre class="log"></pre>
+        </section>
+
+        <section class="card" data-log>
+            <header>
+                <h2>Automatic runs</h2>
+                <div class="actions">
+                    <button data-run="history 200" data-auto>Refresh</button>
+                </div>
+            </header>
+            <p class="hint">Log of scheduled container updates, system upgrades and config syncs (schedules: <code>[updates]</code> in lm-server.toml).</p>
+            <pre class="log"></pre>
+        </section>
+
+        <section class="card" data-log>
+            <header><h2>Secrets repo (GitHub)</h2></header>
+            <form id="setup">
+                <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets" required></label>
+                <label>Branch <input name="branch" value="main" required></label>
+                <label>Folder with lm-server.toml <input name="subdir" placeholder="(repo root)"></label>
+                <label>GitHub username <input name="user" autocomplete="username"></label>
+                <label>Token <input name="token" type="password" autocomplete="off" placeholder="fine-grained, Contents: read-only"></label>
+                <div class="actions"><button class="primary" type="submit">Save &amp; sync</button></div>
+            </form>
+            <pre class="log" hidden></pre>
+        </section>
+    </main>
+</body>
+</html>

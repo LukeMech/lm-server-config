@@ -1,0 +1,17 @@
+[Unit]
+Description=immich: immich-redis
+ConditionPathExists=/var/lib/lm-server/env/immich/enabled
+
+[Container]
+ContainerName=immich-redis
+Pod=immich.pod
+Image=docker.io/valkey/valkey:8-bookworm
+AutoUpdate=registry
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=immich-pod.service

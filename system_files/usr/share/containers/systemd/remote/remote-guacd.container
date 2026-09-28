@@ -1,0 +1,16 @@
+[Unit]
+Description=remote: remote-guacd
+ConditionPathExists=/var/lib/lm-server/env/remote/enabled
+
+[Container]
+ContainerName=remote-guacd
+Pod=remote.pod
+Image=docker.io/guacamole/guacd:1.6.0
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=remote-pod.service

@@ -1,0 +1,25 @@
+# ghcr.io/lukemech/lm-server-webapp -- generic runner for the Flask sites
+# (toolbox, website, exp). No site code in the image: the entrypoint clones
+# APP_REPO at start (private repos with APP_GITHUB_TOKEN), keeps it pulled,
+# and restarts when a new commit lands.
+FROM quay.io/fedora/fedora-minimal:44
+
+RUN dnf5 -y install --setopt=install_weak_deps=False \
+        git-core \
+        python3 \
+        python3-babel \
+        python3-flask \
+        python3-flask-babel \
+        python3-gunicorn \
+        python3-pip \
+    && dnf5 -y clean all
+
+COPY entrypoint.sh /usr/local/bin/lm-server-webapp
+RUN chmod 0755 /usr/local/bin/lm-server-webapp
+
+ENV HOME=/data \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+VOLUME ["/data"]
+ENTRYPOINT ["/usr/local/bin/lm-server-webapp"]

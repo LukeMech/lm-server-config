@@ -1,0 +1,20 @@
+[Unit]
+Description=remote: remote-guacamole
+ConditionPathExists=/var/lib/lm-server/env/remote/enabled
+Requires=remote-db.service remote-guacd.service
+After=remote-db.service remote-guacd.service
+
+[Container]
+ContainerName=remote-guacamole
+Pod=remote.pod
+# Pinned together with guacd: the DB schema follows the release.
+Image=docker.io/guacamole/guacamole:1.6.0
+EnvironmentFile=/var/lib/lm-server/env/remote/guacamole.env
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=remote-pod.service

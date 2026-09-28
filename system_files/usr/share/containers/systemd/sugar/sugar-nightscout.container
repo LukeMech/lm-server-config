@@ -1,0 +1,20 @@
+[Unit]
+Description=sugar: sugar-nightscout
+ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
+Requires=sugar-mongo.service
+After=sugar-mongo.service
+
+[Container]
+ContainerName=sugar-nightscout
+Pod=sugar.pod
+Image=docker.io/nightscout/cgm-remote-monitor:latest
+AutoUpdate=registry
+EnvironmentFile=/var/lib/lm-server/env/sugar/nightscout.env
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=sugar-pod.service

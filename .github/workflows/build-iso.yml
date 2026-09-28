@@ -1,0 +1,91 @@
+name: Build installer ISO
+
+# Called by build.yml after a release is published, or run by hand from the
+# Actions UI (then it's just a build artifact unless publish + tag are set).
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Attach the ISO to an existing release"
+        type: boolean
+        default: false
+      tag:
+        description: "Existing release tag (required if publish is checked)"
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+      tag:
+        type: string
+        default: ""
+
+env:
+  IMAGE: "ghcr.io/lukemech/lm-server:latest"
+
+concurrency:
+  group: build-iso-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ISO
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build ISO
+        id: build
+        uses: osbuild/bootc-image-builder-action@486ce86198c7d7e123a19dd239525562c4f520d0 # main
+        with:
+          config-file: ./disk_config/iso.toml
+          image: ${{ env.IMAGE }}
+          types: anaconda-iso
+          additional-args: --use-librepo=True
+
+      # GitHub release assets are capped at 2 GiB: a bigger ISO is split into
+      # parts (join with `cat lm-server-*.iso.part-* > lm-server.iso`).
+      - name: Prepare release files
+        id: files
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          ISO=$(sudo find "${{ steps.build.outputs.output-directory }}" -iname '*.iso' -print -quit)
+          [[ -n "${ISO}" ]] || { echo "no ISO produced" >&2; exit 1; }
+          NAME="lm-server${TAG:+-${TAG}}.iso"
+          mkdir -p dist
+          sudo mv "${ISO}" "dist/${NAME}"
+          sudo chown "$(id -u):$(id -g)" "dist/${NAME}"
+          (cd dist && sha256sum "${NAME}" > "${NAME}.sha256")
+          if (( $(stat -c %s "dist/${NAME}") > 2000000000 )); then
+            (cd dist && split -b 1900M -d -a 2 "${NAME}" "${NAME}.part-" && rm -f "${NAME}")
+          fi
+          ls -la dist
+
+      - name: Upload ISO artifact
+        if: inputs.publish != true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lm-server-iso
+          path: dist/
+          retention-days: 3
+
+      - name: Attach ISO to release
+        if: inputs.publish == true
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ inputs.tag }}
+          fail_on_unmatched_files: true
+          files: dist/*

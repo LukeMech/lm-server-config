@@ -1,0 +1,22 @@
+[Unit]
+Description=immich: immich-server
+ConditionPathExists=/var/lib/lm-server/env/immich/enabled
+Requires=immich-database.service immich-redis.service
+After=immich-database.service immich-redis.service
+
+[Container]
+ContainerName=immich-server
+Pod=immich.pod
+Image=ghcr.io/immich-app/immich-server:release
+AutoUpdate=registry
+EnvironmentFile=/var/lib/lm-server/env/immich/server.env
+Volume=/var/mnt/data/immich:/data:Z
+Volume=/etc/localtime:/etc/localtime:ro
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=immich-pod.service

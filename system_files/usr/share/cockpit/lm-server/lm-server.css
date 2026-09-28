@@ -1,0 +1,137 @@
+:root {
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --text: #151515;
+    --muted: #6a6e73;
+    --border: #d2d2d2;
+    --accent: #0066cc;
+    --accent-text: #ffffff;
+    --code: #f0f0f0;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1b1d21;
+        --card: #26292d;
+        --text: #e0e0e0;
+        --muted: #a2a5a8;
+        --border: #3c3f42;
+        --accent: #3d8fe0;
+        --accent-text: #ffffff;
+        --code: #1b1d21;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 "Red Hat Text", system-ui, sans-serif;
+}
+
+main {
+    display: grid;
+    gap: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.card header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.hint {
+    color: var(--muted);
+    margin: 8px 0 0;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+button {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+}
+
+button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: progress;
+}
+
+pre {
+    background: var(--code);
+    border-radius: 4px;
+    padding: 12px;
+    margin: 12px 0 0;
+    overflow-x: auto;
+    max-height: 480px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+code {
+    background: var(--code);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+label {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+}
+
+input {
+    font: inherit;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+pre.log {
+    min-height: 2em;
+}
+
+pre.log.failed {
+    outline: 2px solid #c9190b;
+}

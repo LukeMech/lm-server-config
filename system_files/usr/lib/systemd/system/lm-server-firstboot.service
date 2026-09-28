@@ -1,0 +1,22 @@
+[Unit]
+Description=lm-server first boot: ask for GitHub credentials of the secrets repo
+Documentation=https://github.com/LukeMech/lm-server-config
+ConditionPathExists=!/var/lib/lm-server/secrets.env
+Wants=network-online.target
+After=network-online.target systemd-user-sessions.service
+# Holds tty1's login prompt until answered (or skipped / timed out); the
+# setup can also be done later from Cockpit > lm-server or with `sudo lm-server setup`.
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/lm-server setup --firstboot
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

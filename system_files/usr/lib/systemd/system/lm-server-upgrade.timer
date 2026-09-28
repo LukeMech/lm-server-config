@@ -1,0 +1,11 @@
+[Unit]
+Description=lm-server: scheduled system upgrade (enabled by AUTO_UPGRADE=true)
+
+[Timer]
+# Overridden by UPGRADE_SCHEDULE in host/host.env.
+OnCalendar=Sun 04:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

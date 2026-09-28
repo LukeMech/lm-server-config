@@ -1,0 +1,18 @@
+[Unit]
+Description=sugar: sugar-mongo
+ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
+
+[Container]
+ContainerName=sugar-mongo
+Pod=sugar.pod
+# Nightscout's documented version; not auto-updated (on-disk data format).
+Image=docker.io/library/mongo:4.4
+Volume=/var/lib/lm-server/data/sugar/mongo:/data/db:Z
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=sugar-pod.service
