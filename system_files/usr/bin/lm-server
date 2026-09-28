@@ -22,6 +22,7 @@ Containers (updated independently of the system)
 Configs (private lm-server-config-secrets repo)
   setup                  (re)enter the GitHub repo + credentials
   sync [--force]         pull configs and apply them now
+  config pull            = sync: fetch changes pushed to GitHub and apply them
   config show|save       print lm-server.toml / save a new one (stdin): commit, push, apply
 
 Services
@@ -313,6 +314,7 @@ cmd_start_enabled() {
 
 # ------------------------------------------------------------------ config editing
 
+# config pull: = sync (fetch + apply).
 # config show: the current lm-server.toml (freshly pulled).
 # config rev:  the commit it comes from (for `save --base`).
 # config save [--base <commit>] [--message <text>]: new lm-server.toml on
@@ -322,6 +324,11 @@ cmd_start_enabled() {
 cmd_config() {
     local sub=${1:-}
     shift || true
+    # config pull: same as `sync` -- fetch what was pushed to GitHub, apply it.
+    if [[ ${sub} == pull ]]; then
+        cmd_sync "$@"
+        return
+    fi
     lms_load_secrets || lms_die "not configured yet -- run: sudo lm-server setup"
     exec 9>/run/lm-server-sync.lock
     flock 9
@@ -331,7 +338,7 @@ cmd_config() {
     show) cat "${conf}" ;;
     rev) git -C "${LMS_REPO_DIR}" rev-parse HEAD ;;
     save) config_save "${conf}" "$@" ;;
-    *) lms_die "usage: lm-server config show|rev|save [--base <commit>] [--message <text>]" ;;
+    *) lms_die "usage: lm-server config pull|show|rev|save [--base <commit>] [--message <text>]" ;;
     esac
 }
 

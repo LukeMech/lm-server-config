@@ -200,7 +200,7 @@ VM 104 win11: `qemu-img convert` to qcow2, then import it in Cockpit > Virtual m
 
 ```
 lm-server status | history [N] | routes | services
-lm-server setup | sync [--force] | config show | config save < lm-server.toml
+lm-server setup | sync [--force] (= config pull) | config show | config save < lm-server.toml
 lm-server upgrade [--check|--apply] | rollback | update [--dry-run]
 lm-server start|stop|restart|logs <service>
 lm-server prune-adhoc
