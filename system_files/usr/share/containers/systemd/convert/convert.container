@@ -14,5 +14,6 @@ Volume=/var/lib/lm-server/volumes/convert:/app/data:Z
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-convert.slice
 Restart=always
 TimeoutStartSec=900

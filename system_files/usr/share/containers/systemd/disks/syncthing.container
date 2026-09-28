@@ -14,6 +14,7 @@ Volume=/var/lib/lm-server/volumes/disks/docs:/mnt/docs:z
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-disks.slice
 Restart=always
 TimeoutStartSec=900
 

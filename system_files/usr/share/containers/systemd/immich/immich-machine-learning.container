@@ -12,6 +12,7 @@ Volume=/var/lib/lm-server/volumes/immich/model-cache:/cache:Z
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-immich.slice
 Restart=always
 TimeoutStartSec=900
 

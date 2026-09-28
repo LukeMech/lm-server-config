@@ -9,6 +9,7 @@ Image=docker.io/guacamole/guacd:1.6.0
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-remote.slice
 Restart=always
 TimeoutStartSec=900
 

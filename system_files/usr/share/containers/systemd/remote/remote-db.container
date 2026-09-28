@@ -13,6 +13,7 @@ Volume=/var/lib/lm-server/env/remote/initdb:/docker-entrypoint-initdb.d:ro,Z
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-remote.slice
 Restart=always
 TimeoutStartSec=900
 

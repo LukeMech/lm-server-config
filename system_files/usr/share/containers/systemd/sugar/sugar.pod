@@ -11,3 +11,6 @@ RequiresMountsFor=/var/lib/lm-server/volumes/sugar
 PodName=sugar
 Network=sugar.network
 PublishPort=127.0.0.1:1337:1337
+
+[Service]
+Slice=lm-server-sugar.slice

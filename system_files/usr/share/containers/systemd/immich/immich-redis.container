@@ -10,6 +10,7 @@ AutoUpdate=registry
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-immich.slice
 Restart=always
 TimeoutStartSec=900
 

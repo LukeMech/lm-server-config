@@ -7,6 +7,8 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
+# CPU/RAM limits: [cloudflared] cpus/memory in lm-server.toml.
+Slice=lm-server-cloudflared.slice
 # TUNNEL_TOKEN from lm-server.toml. The published routes live in the
 # Cloudflare dashboard and point at http://localhost:<port> (`lm-server routes`).
 EnvironmentFile=/var/lib/lm-server/env/cloudflared/cloudflared.env

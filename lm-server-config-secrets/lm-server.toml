@@ -37,6 +37,10 @@ adhoc_ephemeral = true
 # on the system disk; `storage = "/var/mnt/<disk>"` in a section puts it on
 # that disk instead (mounted in Cockpit > Storage). Change it any time --
 # lm-server stops the service, copies the data over and starts it again.
+#
+# Resources: `cpus = 2` (cores, may be 0.5) and `memory = "4G"` cap a service
+# (all of its containers together); leave them out for no limit. Current
+# usage: `lm-server services`.
 
 [cloudflared]
 # Zero Trust > Networks > Tunnels > your tunnel > token.
@@ -68,6 +72,8 @@ users = [{ email = "you@example.com", password = "CHANGE_ME" }]
 
 [immich]
 storage = "/var/mnt/hdd" # the HDD mirror
+cpus = 4
+memory = "6G"
 db_password = "CHANGE_ME" # letters and digits only
 admin = { email = "you@example.com", password = "CHANGE_ME", name = "Admin" }
 # users = [ { email = "family@example.com", password = "CHANGE_ME", name = "Family" } ]

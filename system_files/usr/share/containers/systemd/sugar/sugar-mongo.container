@@ -11,6 +11,7 @@ Volume=/var/lib/lm-server/volumes/sugar/mongo:/data/db:Z
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-sugar.slice
 Restart=always
 TimeoutStartSec=900
 

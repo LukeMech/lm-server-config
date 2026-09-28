@@ -11,3 +11,6 @@ RequiresMountsFor=/var/lib/lm-server/volumes/immich
 PodName=immich
 Network=immich.network
 PublishPort=127.0.0.1:2283:2283
+
+[Service]
+Slice=lm-server-immich.slice

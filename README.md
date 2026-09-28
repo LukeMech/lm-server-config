@@ -139,6 +139,13 @@ lm-server sync      # target isn't empty -> no copy, just switch and start
 `/var/lib/lm-server/volumes/<service>/` always shows the service's current
 data, wherever it lives.
 
+**CPU and RAM per service**: `cpus = 2` (cores, `0.5` works) and `memory = "4G"`
+in a service's section cap all of its containers together, like the
+cores/RAM of a Proxmox guest. They're applied live via the service's systemd
+slice `lm-server-<service>.slice`. Leave them out for no limit;
+`lm-server services` shows usage against the limit. Swap is **zram** (half of RAM,
+max 8 GiB, zstd), configured in `/usr/lib/systemd/zram-generator.conf`.
+
 Disks are set up in **Cockpit > Storage**. Cockpit writes `/etc/fstab`, and
 bootc keeps `/etc` across upgrades.
 - **NVMe**: format XFS, mount point `/var/mnt/nvme`.

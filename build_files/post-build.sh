@@ -37,6 +37,7 @@ for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint 
     }
 done
 python3 -c 'import tomllib'
+test -x /usr/lib/systemd/system-generators/zram-generator
 
 # Validate every quadlet now, not at first boot on the server.
 /usr/libexec/podman/quadlet -dryrun >/dev/null

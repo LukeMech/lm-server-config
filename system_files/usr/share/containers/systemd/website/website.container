@@ -20,5 +20,6 @@ DropCapability=ALL
 NoNewPrivileges=true
 
 [Service]
+Slice=lm-server-website.slice
 Restart=always
 TimeoutStartSec=900

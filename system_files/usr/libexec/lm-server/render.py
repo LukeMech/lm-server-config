@@ -174,6 +174,25 @@ def volumes(out, *subdirs):
     out.write("volumes", "".join(f"{d}\n" for d in subdirs))
 
 
+def limits(sec, out, where):
+    """Optional `cpus = 2` / `memory = "4G"`: systemd limits of lm-server-<svc>.slice
+    (all of the service's containers together). Always written, so removing a
+    key lifts the limit again."""
+    props = ["MemoryMax=infinity", "CPUQuota="]
+    mem = sec.get("memory")
+    if mem is not None:
+        mem = str(mem).upper()
+        if not re.fullmatch(r"[0-9]+(\.[0-9]+)?[KMGT]?", mem):
+            raise ConfigError(f"{where}.memory must look like \"512M\" or \"4G\" (got '{sec['memory']}')")
+        props[0] = f"MemoryMax={mem}"
+    cpus = sec.get("cpus")
+    if cpus is not None:
+        if isinstance(cpus, bool) or not isinstance(cpus, (int, float)) or cpus <= 0:
+            raise ConfigError(f"{where}.cpus must be a number of cores, e.g. 2 or 0.5")
+        props[1] = f"CPUQuota={round(cpus * 100)}%"
+    out.write("limits", "".join(f"{p}\n" for p in props))
+
+
 def storage(sec, out, where):
     """Optional `storage = "/var/mnt/<disk>"`: the disk holding this service's data."""
     path = sec.get("storage", "")
@@ -393,6 +412,7 @@ def cmd_render(toml_path, out_root):
             no_placeholders(sec, name)
             render(sec, Out(target), ctx)
             storage(sec, Out(target), name)
+            limits(sec, Out(target), name)
             os.makedirs(target, mode=0o700, exist_ok=True)
         except (ConfigError, subprocess.CalledProcessError, OSError) as e:
             shutil.rmtree(target, ignore_errors=True)

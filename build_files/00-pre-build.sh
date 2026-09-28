@@ -32,6 +32,8 @@ dnf5 -y install \
     rsync \
     shadow-utils \
     util-linux \
+    `# compressed swap in RAM (config: system_files/usr/lib/systemd/zram-generator.conf)` \
+    zram-generator \
     `# data disks (Cockpit > Storage): mdraid + XFS` \
     mdadm \
     xfsprogs

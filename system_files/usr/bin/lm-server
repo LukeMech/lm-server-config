@@ -232,6 +232,7 @@ apply_service() {
     fi
 
     apply_storage "${svc}" "${src}"
+    apply_limits "${svc}" "${src}"
     rm -rf "${dst}"
     mv "${src}" "${dst}"
     touch "${dst}/enabled"
@@ -301,6 +302,16 @@ EOF
             [[ -n ${d} ]] && mkdir -p "${vol}/${d}"
         done <"${src}/volumes"
     fi
+}
+
+# apply_limits <svc> <rendered-dir>: CPU/RAM limits of lm-server-<svc>.slice,
+# applied live and kept across reboots (systemctl set-property).
+apply_limits() {
+    local -a props=()
+    [[ -f $2/limits ]] && mapfile -t props <"$2/limits"
+    ((${#props[@]})) || return 0
+    systemctl set-property "lm-server-$1.slice" "${props[@]}" ||
+        lms_log "$1: could not apply limits (${props[*]})"
 }
 
 cmd_start_enabled() {
@@ -391,8 +402,8 @@ svc_arg() {
 }
 
 cmd_services() {
-    local name units routes desc u state line
-    printf '%-12s %-8s %s\n' SERVICE CONFIG STATE
+    local name units routes desc u state line mem limit
+    printf '%-12s %-7s %-10s %-17s %s\n' SERVICE CONFIG STATE MEMORY/LIMIT DESCRIPTION
     while IFS=$'\t' read -r name units routes desc; do
         line=""
         for u in ${units}; do
@@ -400,7 +411,12 @@ cmd_services() {
             line+="${state} "
         done
         if lms_enabled "${name}"; then state=yes; else state=-; fi
-        printf '%-12s %-8s %-10s %s\n' "${name}" "${state}" "${line% }" "${desc}"
+        # Usage of the whole service (all its containers) from its slice.
+        mem=$(systemctl show -P MemoryCurrent "lm-server-${name}.slice" 2>/dev/null || true)
+        limit=$(systemctl show -P MemoryMax "lm-server-${name}.slice" 2>/dev/null || true)
+        [[ ${mem} =~ ^[0-9]+$ ]] && mem=$(numfmt --to=iec "${mem}") || mem=-
+        [[ ${limit} =~ ^[0-9]+$ ]] && limit=$(numfmt --to=iec "${limit}") || limit=-
+        printf '%-12s %-7s %-10s %-17s %s\n' "${name}" "${state}" "${line% }" "${mem}/${limit}" "${desc}"
     done < <(lms_catalog)
 }
 
