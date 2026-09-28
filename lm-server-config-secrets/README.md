@@ -6,6 +6,8 @@ The whole server config is one file: [`lm-server.toml`](lm-server.toml).
 2. Replace every `CHANGE_ME`, and delete the sections of services you don't want.
 3. Create a GitHub fine-grained token with *Contents: read-only* on this repo
    and on the private site repos (`LukeMech/website`, `LukeMech/CV`).
+   To edit the config from Cockpit (it commits and pushes), give it
+   *Contents: Read and write* on this repo instead.
 4. Enter the repo name and the token when the server asks at first boot (or
    later with `sudo lm-server setup`, or Cockpit > lm-server).
 

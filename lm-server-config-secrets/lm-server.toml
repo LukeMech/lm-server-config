@@ -63,7 +63,7 @@ users = [{ email = "you@example.com", password = "CHANGE_ME" }]
 # Any ConvertX setting: env = { AUTO_DELETE_EVERY_N_HOURS = "24" }
 
 [immich]
-storage = "/var/mnt/nvme" # the 2 TB NVMe
+storage = "/var/mnt/hdd" # the HDD mirror
 db_password = "CHANGE_ME" # letters and digits only
 admin = { email = "you@example.com", password = "CHANGE_ME", name = "Admin" }
 # users = [ { email = "family@example.com", password = "CHANGE_ME", name = "Family" } ]

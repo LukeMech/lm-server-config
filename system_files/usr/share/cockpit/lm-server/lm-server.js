@@ -2,12 +2,13 @@
 "use strict";
 
 let busy = false;
+let configBase = null; // commit the editor text was loaded from (see below)
 const buttons = () => document.querySelectorAll("button");
 
 // Runs `lm-server <args>` as root and streams its output live into the log
 // panel of the card the action belongs to.
 function run(args, card, input) {
-    if (busy) return Promise.resolve();
+    if (busy) return Promise.resolve(false);
     busy = true;
     const log = card.querySelector(".log");
     log.hidden = false;
@@ -23,15 +24,21 @@ function run(args, card, input) {
     });
     if (input !== undefined) proc.input(input);
     return proc
-        .then(() => { log.textContent += "\n✔ done"; })
+        .then(() => {
+            log.textContent += "\n✔ done";
+            return true;
+        })
         .catch(ex => {
             log.textContent += "\n✘ failed: " + (ex.message || ex);
             log.classList.add("failed");
+            return false;
         })
         .finally(() => {
             log.scrollTop = log.scrollHeight;
             busy = false;
             buttons().forEach(b => { b.disabled = false; });
+            // Nothing to save until a file was loaded.
+            document.getElementById("config-save").disabled = configBase === null;
         });
 }
 
@@ -57,6 +64,43 @@ document.getElementById("setup").addEventListener("submit", event => {
     if (f.get("user")) args.push("--user", f.get("user"));
     run(args, form.closest(".card"), f.get("token") + "\n").then(refreshStatus);
     form.elements.token.value = "";
+});
+
+// ---- lm-server.toml editor
+const configCard = document.getElementById("config");
+const configText = document.getElementById("config-text");
+const configSave = document.getElementById("config-save");
+
+function configLoad() {
+    const log = configCard.querySelector(".log");
+    const opts = { superuser: "require", err: "message" };
+    return Promise.all([
+        cockpit.spawn(["/usr/bin/lm-server", "config", "rev"], opts),
+        cockpit.spawn(["/usr/bin/lm-server", "config", "show"], opts),
+    ])
+        .then(([rev, text]) => {
+            configBase = rev.trim();
+            configText.value = text;
+            configSave.disabled = false;
+            log.hidden = false;
+            log.classList.remove("failed");
+            log.textContent = "Loaded commit " + configBase.slice(0, 7) + ".";
+        })
+        .catch(ex => {
+            log.hidden = false;
+            log.classList.add("failed");
+            log.textContent = "✘ could not load: " + (ex.message || ex);
+        });
+}
+
+document.getElementById("config-load").addEventListener("click", configLoad);
+configSave.addEventListener("click", () => {
+    if (!window.confirm("Commit and push this lm-server.toml to GitHub, then apply it?")) return;
+    const args = ["config", "save", "--base", configBase];
+    // On failure the edit stays in the box, to fix and retry.
+    run(args, configCard, configText.value.replace(/\r\n/g, "\n")).then(ok => {
+        if (ok) refreshStatus().then(configLoad);
+    });
 });
 
 // Status first, then the history of automatic runs.

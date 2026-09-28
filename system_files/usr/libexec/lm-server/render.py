@@ -11,6 +11,7 @@ Usage:
     render.py services              name<TAB>units<TAB>routes<TAB>description
     render.py render <toml> <out>   exit 0 ok, 1 some service invalid (see
                                     <out>/.errors/<service>), 2 unreadable config
+    render.py check <toml>          same checks and exit codes, writes nothing
 
 The GitHub credentials from `lm-server setup` come in as LMS_GITHUB_TOKEN /
 LMS_GITHUB_USER (default token for the web apps' private repos).
@@ -31,6 +32,7 @@ import tomllib
 VOLUMES = "/var/lib/lm-server/volumes"
 CACHE = "/var/lib/lm-server/cache"
 GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
+CHECK_ONLY = False  # `check`: validate without side effects (no podman)
 
 # Every service this image can run. "units" are what `lm-server start/stop`
 # acts on (a pod unit starts/stops all of its containers).
@@ -302,6 +304,8 @@ def r_remote(sec, out, ctx):
     )
     out.write("guacamole.env", env_file(env))
     out.json("users.json", users(sec, w, ["login", "password"]))
+    if CHECK_ONLY:
+        return
     # DB schema, generated once per Guacamole version by the image's own script.
     cache = os.path.join(CACHE, f"guacamole-initdb-{GUAC_IMAGE.rsplit(':', 1)[1]}.sql")
     if not os.path.exists(cache) or os.path.getsize(cache) == 0:
@@ -404,9 +408,22 @@ def cmd_services():
     return 0
 
 
+def cmd_check(toml_path):
+    global CHECK_ONLY
+    import tempfile
+    CHECK_ONLY = True
+    with tempfile.TemporaryDirectory() as tmp:
+        rc = cmd_render(toml_path, tmp)
+    if rc == 0:
+        print("config OK", file=sys.stderr)
+    return rc
+
+
 def main(argv):
     if argv[1:2] == ["services"]:
         return cmd_services()
+    if argv[1:2] == ["check"] and len(argv) == 3:
+        return cmd_check(argv[2])
     if argv[1:2] == ["render"] and len(argv) == 4:
         return cmd_render(argv[2], argv[3])
     print(__doc__, file=sys.stderr)

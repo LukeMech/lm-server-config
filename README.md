@@ -79,7 +79,14 @@ every boot, which includes every system upgrade. Turn this off with
 |---|---|---|
 | System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
 | Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), Cockpit | `[updates] containers`, default `"daily"` |
-| Configs | `lm-server sync`, Cockpit | every 5 min |
+| Configs | `lm-server sync`, Cockpit *Sync configs* | every 5 min |
+
+**Editing the config from Cockpit**: *Configuration (lm-server.toml)* loads
+the file from the secrets repo. *Save, push & apply* checks it, commits and
+pushes it to GitHub, then applies it right away (`lm-server config show|save`
+on the CLI). Pushing needs the token to have *Contents: Read and write* on the
+secrets repo. With a read-only token, edit in GitHub and use *Sync configs*.
+If someone changed the repo meanwhile, the save is refused. Reload and redo the edit.
 
 Schedules are systemd timers, not cron. They take calendar expressions like
 `"daily"`, `"Sun 04:00"` or `"*-*-01 03:00"`. Check one with
@@ -105,6 +112,32 @@ The service's data then lives in `<disk>/<service>/`, bind-mounted in place of
 its folder. If you change `storage` later, the next sync stops the service,
 copies its data to the new disk (only if the target is empty), and starts it
 again. The old copy is never deleted automatically.
+
+**What happens on a `storage` change** (e.g. `/var/mnt/hdd` → `/var/mnt/nvme`):
+1. The service is stopped.
+2. If `<new disk>/<service>/` is empty, the data is copied there (`rsync`,
+   progress in Cockpit > lm-server > Automatic runs / `lm-server history`). If it
+   already holds data, nothing is copied and that data is used as is.
+3. The folder is bind-mounted from the new place and the service starts again.
+4. The old copy stays where it was. Delete it by hand once everything works.
+
+If the disk behind `storage` isn't mounted at boot, the service doesn't start
+(`RequiresMountsFor`), so nothing gets written to the wrong disk. If the disk is
+**replaced with an empty one** mounted at the same path, the service starts
+empty, like a fresh install. Restore its data first (see below).
+
+**Moving data by hand**, e.g. for a large library over several sessions, or
+when restoring a backup:
+
+```sh
+lm-server stop immich
+rsync -aHA --info=progress2 /var/lib/lm-server/volumes/immich/ /var/mnt/nvme/immich/
+# edit [immich] storage = "/var/mnt/nvme" (Cockpit editor or the repo)
+lm-server sync      # target isn't empty -> no copy, just switch and start
+```
+
+`/var/lib/lm-server/volumes/<service>/` always shows the service's current
+data, wherever it lives.
 
 Disks are set up in **Cockpit > Storage**. Cockpit writes `/etc/fstab`, and
 bootc keeps `/etc` across upgrades.
@@ -167,7 +200,7 @@ VM 104 win11: `qemu-img convert` to qcow2, then import it in Cockpit > Virtual m
 
 ```
 lm-server status | history [N] | routes | services
-lm-server setup | sync [--force]
+lm-server setup | sync [--force] | config show | config save < lm-server.toml
 lm-server upgrade [--check|--apply] | rollback | update [--dry-run]
 lm-server start|stop|restart|logs <service>
 lm-server prune-adhoc

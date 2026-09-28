@@ -135,3 +135,35 @@ pre.log {
 pre.log.failed {
     outline: 2px solid #c9190b;
 }
+
+textarea#config-text {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 420px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--code);
+    color: var(--text);
+    font: 13px/1.45 "Red Hat Mono", ui-monospace, monospace;
+    tab-size: 4;
+    resize: vertical;
+}
+
+textarea#config-text {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 420px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--code);
+    color: var(--text);
+    font: 13px/1.45 "Red Hat Mono", ui-monospace, monospace;
+    tab-size: 4;
+    resize: vertical;
+}

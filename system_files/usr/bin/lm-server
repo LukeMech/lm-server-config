@@ -22,6 +22,7 @@ Containers (updated independently of the system)
 Configs (private lm-server-config-secrets repo)
   setup                  (re)enter the GitHub repo + credentials
   sync [--force]         pull configs and apply them now
+  config show|save       print lm-server.toml / save a new one (stdin): commit, push, apply
 
 Services
   services               list services and their state
@@ -148,6 +149,24 @@ setup_save() {
 
 # ------------------------------------------------------------------ sync
 
+# repo_pull: fetch the secrets repo (shallow) into LMS_REPO_DIR, print the
+# path of lm-server.toml in it. Needs lms_load_secrets.
+repo_pull() {
+    local repo=${LMS_S[REPO]} branch=${LMS_S[BRANCH]:-main} subdir=${LMS_S[SUBDIR]:-}
+    local url="https://github.com/${repo}.git"
+    if [[ -d ${LMS_REPO_DIR}/.git && $(git -C "${LMS_REPO_DIR}" remote get-url origin 2>/dev/null) == "${url}" ]]; then
+        lms_git -C "${LMS_REPO_DIR}" fetch -q --depth 1 origin "${branch}"
+        git -C "${LMS_REPO_DIR}" reset -q --hard FETCH_HEAD
+    else
+        rm -rf "${LMS_REPO_DIR}"
+        lms_git clone -q --depth 1 --branch "${branch}" "${url}" "${LMS_REPO_DIR}"
+    fi
+    local conf="${LMS_REPO_DIR}/${subdir#/}"
+    conf="${conf%/}/${LMS_CONFIG_FILE}"
+    [[ -f ${conf} ]] || lms_die "no ${LMS_CONFIG_FILE} in ${repo}${subdir:+/${subdir}}"
+    echo "${conf}"
+}
+
 cmd_sync() {
     local force=0
     [[ ${1:-} == --force ]] && force=1
@@ -161,19 +180,8 @@ cmd_sync() {
         return 0
     }
 
-    local repo=${LMS_S[REPO]} branch=${LMS_S[BRANCH]:-main} subdir=${LMS_S[SUBDIR]:-}
-    local url="https://github.com/${repo}.git"
-    if [[ -d ${LMS_REPO_DIR}/.git && $(git -C "${LMS_REPO_DIR}" remote get-url origin 2>/dev/null) == "${url}" ]]; then
-        lms_git -C "${LMS_REPO_DIR}" fetch -q --depth 1 origin "${branch}"
-        git -C "${LMS_REPO_DIR}" reset -q --hard FETCH_HEAD
-    else
-        rm -rf "${LMS_REPO_DIR}"
-        lms_git clone -q --depth 1 --branch "${branch}" "${url}" "${LMS_REPO_DIR}"
-    fi
-
-    local conf="${LMS_REPO_DIR}/${subdir#/}"
-    conf="${conf%/}/${LMS_CONFIG_FILE}"
-    [[ -f ${conf} ]] || lms_die "no ${LMS_CONFIG_FILE} in ${repo}${subdir:+/${subdir}}"
+    local conf
+    conf=$(repo_pull)
 
     # Render everything into a scratch dir, then swap in per service.
     local new="${LMS_ENV}/.new" rc=0
@@ -303,6 +311,71 @@ cmd_start_enabled() {
     done
 }
 
+# ------------------------------------------------------------------ config editing
+
+# config show: the current lm-server.toml (freshly pulled).
+# config rev:  the commit it comes from (for `save --base`).
+# config save [--base <commit>] [--message <text>]: new lm-server.toml on
+#   stdin -> checked, committed and pushed to the secrets repo, then applied.
+#   Refused if the repo moved past <commit> meanwhile (someone else edited it).
+#   Pushing needs a token with "Contents: Read and write".
+cmd_config() {
+    local sub=${1:-}
+    shift || true
+    lms_load_secrets || lms_die "not configured yet -- run: sudo lm-server setup"
+    exec 9>/run/lm-server-sync.lock
+    flock 9
+    local conf
+    conf=$(repo_pull)
+    case ${sub} in
+    show) cat "${conf}" ;;
+    rev) git -C "${LMS_REPO_DIR}" rev-parse HEAD ;;
+    save) config_save "${conf}" "$@" ;;
+    *) lms_die "usage: lm-server config show|rev|save [--base <commit>] [--message <text>]" ;;
+    esac
+}
+
+config_save() {
+    local conf=$1 base="" msg=""
+    shift
+    while (($#)); do
+        case $1 in
+        --base) base=$2 && shift ;;
+        --message) msg=$2 && shift ;;
+        *) lms_die "config save: unknown argument $1" ;;
+        esac
+        shift
+    done
+    local head
+    head=$(git -C "${LMS_REPO_DIR}" rev-parse HEAD)
+    if [[ -n ${base} && ${base} != "${head}" ]]; then
+        lms_die "the repo changed since you opened it (now ${head:0:7}) -- reload and redo your edit"
+    fi
+
+    local tmp rc=0
+    tmp=$(mktemp /run/lm-server-toml.XXXXXX)
+    trap 'rm -f "${tmp}"' RETURN
+    cat >"${tmp}"
+    "${LMS_RENDER}" check "${tmp}" || rc=$?
+    ((rc < 2)) || lms_die "not saved: ${LMS_CONFIG_FILE} is not valid TOML (see above)"
+    ((rc == 0)) || lms_log "warning: the services listed above won't start until fixed"
+
+    cp "${tmp}" "${conf}"
+    if git -C "${LMS_REPO_DIR}" diff --quiet; then
+        lms_log "no changes"
+    else
+        git -C "${LMS_REPO_DIR}" -c user.name="lm-server" -c user.email="lm-server@$(hostnamectl hostname)" \
+            commit -q -am "${msg:-Update ${LMS_CONFIG_FILE} from $(hostnamectl hostname)}"
+        if ! lms_git -C "${LMS_REPO_DIR}" push -q origin "HEAD:${LMS_S[BRANCH]:-main}"; then
+            git -C "${LMS_REPO_DIR}" reset -q --hard "${head}"
+            lms_die "push failed -- the GitHub token needs \"Contents: Read and write\" on ${LMS_S[REPO]}"
+        fi
+        lms_log "pushed $(git -C "${LMS_REPO_DIR}" rev-parse --short HEAD) to ${LMS_S[REPO]}"
+    fi
+    exec 9>&-
+    cmd_sync
+}
+
 # ------------------------------------------------------------------ services
 
 svc_arg() {
@@ -421,6 +494,7 @@ status) need_root status "$@" && cmd_status ;;
 history) need_root history "$@" && cmd_history "$@" ;;
 setup) need_root setup "$@" && cmd_setup "$@" ;;
 sync) need_root sync "$@" && cmd_sync "$@" ;;
+config) need_root config "$@" && cmd_config "$@" ;;
 start-enabled) need_root start-enabled && cmd_start_enabled ;;
 start | stop | restart) need_root "${cmd}" "$@" && cmd_unit_action "${cmd}" "$@" ;;
 logs) need_root logs "$@" && cmd_logs "$@" ;;
