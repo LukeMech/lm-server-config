@@ -172,8 +172,8 @@ ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 1. Download `lm-server-<tag>.iso` from the latest release. If it was split
    (>2 GB), join it with `cat lm-server-*.iso.part-* > lm-server.iso`, then check
    it against the `.sha256`.
-2. In the installer, set the system disk, network (a static IP) and timezone.
-   There's no user step: accounts come from the config.
+2. The installer only asks for the system disk and the network (a static IP).
+   Timezone, hostname and accounts all come from the config.
 3. After the reboot, tty1 asks for the secrets repo (no login needed):
    owner/name, branch, GitHub username and a **fine-grained token** with
    *Contents: read-only*. GitHub doesn't accept account passwords for git.

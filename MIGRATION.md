@@ -140,7 +140,7 @@ Do not touch the ZFS pool. Then run `poweroff`.
 ## 5. Install lm-server
 
 1. Boot the ISO. In the installer's disk selection, **select only the 120 GB SSD
-   (`sda`)**. NVMe and HDDs must stay untouched. Set network and timezone.
+   (`sda`)**. NVMe and HDDs must stay untouched. Set the network (static IP).
    There's no user step: the admin comes from `[host]` in `lm-server.toml`, so
    make sure `admin_user` / `admin_password_hash` are filled in.
 2. In the secrets repo's `lm-server.toml`:
