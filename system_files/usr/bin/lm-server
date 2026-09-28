@@ -41,13 +41,13 @@ need_root() {
 # ------------------------------------------------------------------ setup
 
 cmd_setup() {
-    local firstboot=0 repo="" branch="" subdir="" user="" token="" token_stdin=0
+    local firstboot=0 repo="" branch="" config="" user="" token="" token_stdin=0
     while (($#)); do
         case $1 in
         --firstboot) firstboot=1 ;;
         --repo) repo=$2 && shift ;;
         --branch) branch=$2 && shift ;;
-        --subdir) subdir=$2 && shift ;;
+        --config) config=$2 && shift ;;
         --user) user=$2 && shift ;;
         --token-stdin) token_stdin=1 ;;
         *) lms_die "setup: unknown argument $1" ;;
@@ -62,14 +62,15 @@ cmd_setup() {
     lms_load_secrets || true
     local def_repo=${LMS_S[REPO]:-${LMS_DEFAULT_REPO}}
     local def_branch=${LMS_S[BRANCH]:-main}
-    local def_subdir=${LMS_S[SUBDIR]:-}
+    local def_config
+    def_config=$(secrets_config_path)
     local def_user=${LMS_S[GITHUB_USER]:-}
 
     if ((token_stdin)); then
         # Non-interactive (Cockpit): everything from args, token from stdin.
         IFS= read -r token || true
-        repo=${repo:-${def_repo}} branch=${branch:-${def_branch}}
-        setup_save "${repo}" "${branch}" "${subdir}" "${user}" "${token}"
+        repo=${repo:-${def_repo}} branch=${branch:-${def_branch}} config=${config:-${def_config}}
+        setup_save "${repo}" "${branch}" "${config}" "${user}" "${token}"
         return
     fi
 
@@ -109,15 +110,14 @@ EOF
         repo=${repo:-${def_repo}}
         read -r -p "  Branch [${def_branch}]: " branch || true
         branch=${branch:-${def_branch}}
-        read -r -p "  Folder with lm-server.toml inside the repo [${def_subdir:-/}]: " subdir || true
-        subdir=${subdir:-${def_subdir}}
-        [[ ${subdir} == / ]] && subdir=""
+        read -r -p "  Config file (.toml) inside the repo [${def_config}]: " config || true
+        config=${config:-${def_config}}
         read -r -p "  GitHub username [${def_user}]: " user || true
         user=${user:-${def_user}}
         # Shown while typing: a 90-character token is hard to enter blind.
         read -r -p "  GitHub token (empty for a public repo): " token || true
         ((firstboot)) && clear 2>/dev/null || true # don't leave it on the console
-        if setup_save "${repo}" "${branch}" "${subdir}" "${user}" "${token}"; then
+        if setup_save "${repo}" "${branch}" "${config}" "${user}" "${token}"; then
             return 0
         fi
         if ((firstboot)); then
@@ -145,11 +145,29 @@ quiet_console() {
     dmesg -n 1 2>/dev/null || true         # kernel: only emergencies on the console
 }
 
-# setup_save <repo> <branch> <subdir> <user> <token>: validates access, then writes.
+# secrets_config_path: path of the config file inside the secrets repo.
+# Older setups stored only its folder (SUBDIR). Needs lms_load_secrets.
+secrets_config_path() {
+    local dir=${LMS_S[SUBDIR]:-}
+    dir=${dir#/}
+    if [[ -n ${LMS_S[CONFIG]:-} ]]; then
+        echo "${LMS_S[CONFIG]}"
+    elif [[ -n ${dir%/} ]]; then
+        echo "${dir%/}/${LMS_CONFIG_FILE}"
+    else
+        echo "${LMS_CONFIG_FILE}"
+    fi
+}
+
+# setup_save <repo> <branch> <config> <user> <token>: validates access, then writes.
 setup_save() {
-    local repo=$1 branch=$2 subdir=$3 user=$4 token=$5
+    local repo=$1 branch=$2 config=${3#/} user=$4 token=$5
     [[ ${repo} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
         lms_log "repo must look like owner/name"
+        return 1
+    }
+    [[ ${config} == *.toml && /${config}/ != */../* ]] || {
+        lms_log "config must be the path of a .toml file in the repo, e.g. lm-server.toml or server/lm-server.toml"
         return 1
     }
     lms_log "checking access to github.com/${repo} (${branch})..."
@@ -164,7 +182,7 @@ setup_save() {
     {
         lms_env_line REPO "${repo}"
         lms_env_line BRANCH "${branch}"
-        lms_env_line SUBDIR "${subdir}"
+        lms_env_line CONFIG "${config}"
         lms_env_line GITHUB_USER "${user}"
         lms_env_line GITHUB_TOKEN "${token}"
     } >"${tmp}"
@@ -180,7 +198,7 @@ setup_save() {
     local rc=0
     (cmd_sync --force) || rc=$?
     # 0 = all applied, 3 = some services skipped (warned above): setup is
-    # done either way. Anything else (no lm-server.toml in that repo/folder,
+    # done either way. Anything else (no such config file in the repo,
     # unreadable file): undo, so the question comes back.
     if ((rc == 0 || rc == 3)); then
         rm -f "${old}"
@@ -199,7 +217,8 @@ setup_save() {
 # repo_pull: fetch the secrets repo (shallow) into LMS_REPO_DIR, print the
 # path of lm-server.toml in it. Needs lms_load_secrets.
 repo_pull() {
-    local repo=${LMS_S[REPO]} branch=${LMS_S[BRANCH]:-main} subdir=${LMS_S[SUBDIR]:-}
+    local repo=${LMS_S[REPO]} branch=${LMS_S[BRANCH]:-main} path
+    path=$(secrets_config_path)
     local url="https://github.com/${repo}.git"
     if [[ -d ${LMS_REPO_DIR}/.git && $(git -C "${LMS_REPO_DIR}" remote get-url origin 2>/dev/null) == "${url}" ]]; then
         lms_git -C "${LMS_REPO_DIR}" fetch -q --depth 1 origin "${branch}"
@@ -208,9 +227,8 @@ repo_pull() {
         rm -rf "${LMS_REPO_DIR}"
         lms_git clone -q --depth 1 --branch "${branch}" "${url}" "${LMS_REPO_DIR}"
     fi
-    local conf="${LMS_REPO_DIR}/${subdir#/}"
-    conf="${conf%/}/${LMS_CONFIG_FILE}"
-    [[ -f ${conf} ]] || lms_die "no ${LMS_CONFIG_FILE} in ${repo}${subdir:+/${subdir}}"
+    local conf="${LMS_REPO_DIR}/${path}"
+    [[ -f ${conf} ]] || lms_die "no ${path} in ${repo}@${branch}"
     echo "${conf}"
 }
 
@@ -300,9 +318,9 @@ apply_service() {
 }
 
 # apply_storage <svc> <rendered-dir>: all data of a service lives in
-# volumes/<svc>. With `storage = "/var/mnt/<disk>"` that's a bind mount of
-# <disk>/<svc>; on a change the service is stopped and its data copied over
-# (only into an empty target -- the old copy is kept, never deleted).
+# volumes/<svc>. With `storage = "/var/mnt/<path>"` that's a bind mount of
+# exactly that folder; on a change the service is stopped and its data copied
+# over (only into an empty target -- the old copy is kept, never deleted).
 # Called from apply_service (its ${units[@]} are in scope).
 apply_storage() {
     local svc=$1 src=$2 vol="${LMS_VOLUMES}/$1"
@@ -321,8 +339,12 @@ apply_storage() {
             rm -f "${file}"
         fi
         if [[ -n ${want} ]]; then
-            mountpoint -q "${want%/*}" ||
-                lms_log "${svc}: warning: ${want%/*} is not a mounted disk (Cockpit > Storage) -- using the system disk"
+            # Same filesystem as /var/lib/lm-server (nearest existing folder)
+            # = the disk behind it isn't mounted.
+            local probe=${want}
+            while [[ ! -e ${probe} ]]; do probe=${probe%/*}; done
+            [[ $(stat -c %d "${probe:-/}") != "$(stat -c %d "${LMS_STATE}")" ]] ||
+                lms_log "${svc}: warning: ${want} is on the system disk (no disk mounted there, see Cockpit > Storage)"
             mkdir -p "${want}"
         fi
         local from=${cur:-${vol}} to=${want:-${vol}}
@@ -383,6 +405,7 @@ cmd_start_enabled() {
 # config pull: = sync (fetch + apply).
 # config show: the current lm-server.toml (freshly pulled).
 # config rev:  the commit it comes from (for `save --base`).
+# config source: repo, branch, config file path and GitHub user in use.
 # config save [--base <commit>] [--message <text>]: new lm-server.toml on
 #   stdin -> checked, committed and pushed to the secrets repo, then applied.
 #   Refused if the repo moved past <commit> meanwhile (someone else edited it).
@@ -396,6 +419,15 @@ cmd_config() {
         return
     fi
     lms_load_secrets || lms_die "not configured yet -- run: sudo lm-server setup"
+    # config source: where the config comes from (Cockpit fills the setup
+    # form with it). The token is never printed.
+    if [[ ${sub} == source ]]; then
+        lms_env_line REPO "${LMS_S[REPO]}"
+        lms_env_line BRANCH "${LMS_S[BRANCH]:-main}"
+        lms_env_line CONFIG "$(secrets_config_path)"
+        lms_env_line GITHUB_USER "${LMS_S[GITHUB_USER]:-}"
+        return
+    fi
     exec 9>/run/lm-server-sync.lock
     flock 9
     local conf
@@ -404,7 +436,7 @@ cmd_config() {
     show) cat "${conf}" ;;
     rev) git -C "${LMS_REPO_DIR}" rev-parse HEAD ;;
     save) config_save "${conf}" "$@" ;;
-    *) lms_die "usage: lm-server config pull|show|rev|save [--base <commit>] [--message <text>]" ;;
+    *) lms_die "usage: lm-server config pull|show|rev|source|save [--base <commit>] [--message <text>]" ;;
     esac
 }
 
@@ -518,7 +550,7 @@ cmd_status() {
     echo
     echo "== Configs"
     if lms_load_secrets; then
-        echo "repo:   ${LMS_S[REPO]}@${LMS_S[BRANCH]:-main}${LMS_S[SUBDIR]:+ (${LMS_S[SUBDIR]})}"
+        echo "repo:   ${LMS_S[REPO]}@${LMS_S[BRANCH]:-main} ($(secrets_config_path))"
         echo "commit: $(cat "${LMS_STATE}/config.rev" 2>/dev/null || echo -)"
         echo "synced: $(cat "${LMS_STATE}/config.synced" 2>/dev/null || echo never)"
     else

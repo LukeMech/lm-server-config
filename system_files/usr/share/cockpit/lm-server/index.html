@@ -84,9 +84,9 @@
         <section class="card" data-log>
             <header><h2>Secrets repo (GitHub)</h2></header>
             <form id="setup">
-                <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets" required></label>
+                <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets"></label>
                 <label>Branch <input name="branch" value="main" required></label>
-                <label>Folder with lm-server.toml <input name="subdir" placeholder="(repo root)"></label>
+                <label>Config file (.toml) in the repo <input name="config" placeholder="lm-server.toml"></label>
                 <label>GitHub username <input name="user" autocomplete="username"></label>
                 <label>Token <input name="token" type="password" autocomplete="off" placeholder="fine-grained, Contents: read-only"></label>
                 <div class="actions"><button class="primary" type="submit">Save &amp; sync</button></div>

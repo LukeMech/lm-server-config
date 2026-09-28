@@ -43,8 +43,8 @@ import tomllib
 
 QUADLETS = os.environ.get("LMS_QUADLET_DIR", "/usr/share/containers/systemd")
 # Every service keeps all of its data in VOLUMES/<service>/. By default that's
-# on the system disk; `storage = "/var/mnt/<disk>"` in its section bind-mounts
-# <disk>/<service> there instead (lm-server moves the data on a change).
+# on the system disk; `storage = "/var/mnt/<path>"` in its section bind-mounts
+# exactly that folder there instead (lm-server moves the data on a change).
 VOLUMES = "/var/lib/lm-server/volumes"
 CACHE = "/var/lib/lm-server/cache"
 GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
@@ -214,8 +214,12 @@ def limits(sec, out, where):
     out.write("limits", "".join(f"{p}\n" for p in props))
 
 
-def storage(sec, out, where):
-    """Optional `storage = "/var/mnt/<disk>"`: the disk holding this service's data."""
+def storage(sec, out, where, taken):
+    """Optional `storage = "/var/mnt/<path>"`: the folder holding this service's data.
+
+    Used as is (e.g. an LV mounted at /var/mnt/hdd-mirror/immich). `taken` maps
+    the folders already claimed to their service: two services can't share one,
+    nor sit inside each other's."""
     path = sec.get("storage", "")
     if not path:
         return
@@ -223,8 +227,12 @@ def storage(sec, out, where):
         path = "/var" + path  # /mnt is a symlink to /var/mnt on bootc
     path = posixpath.normpath(path)
     if not re.fullmatch(r"/var/(mnt|srv)/[^\s]+", path):
-        raise ConfigError(f"{where}.storage must be a mounted disk under /var/mnt (got '{path}')")
-    out.write("storage", f"{path}/{where}\n")
+        raise ConfigError(f"{where}.storage must be a folder under /var/mnt (got '{path}')")
+    for other, p in taken.items():
+        if path == p or path.startswith(p + "/") or p.startswith(path + "/"):
+            raise ConfigError(f"{where}.storage '{path}' overlaps [{other}] storage '{p}' -- give each service its own folder")
+    taken[where] = path
+    out.write("storage", f"{path}\n")
 
 
 # ---------------------------------------------------------------- renderers
@@ -409,6 +417,7 @@ def cmd_render(toml_path, out_root):
             print(f"warning: unknown section [{key}] ignored (no such service in this image)", file=sys.stderr)
 
     ctx = {"token": os.environ.get("LMS_GITHUB_TOKEN", ""), "user": os.environ.get("LMS_GITHUB_USER", "")}
+    taken = {}  # storage folders claimed so far
     r_host(cfg, Out(os.path.join(out_root, "host")))
     status = 0
     for name, spec in services.items():
@@ -423,7 +432,7 @@ def cmd_render(toml_path, out_root):
             no_placeholders(sec, name)
             CUSTOM.get(name, r_generic)(name, spec, sec, out, ctx)
             volumes(out, *spec["volumes"])
-            storage(sec, out, name)
+            storage(sec, out, name, taken)
             limits(sec, out, name)
             os.makedirs(target, mode=0o700, exist_ok=True)
         except (ConfigError, subprocess.CalledProcessError, OSError) as e:

@@ -69,12 +69,31 @@ document.getElementById("setup").addEventListener("submit", event => {
     event.preventDefault();
     const form = event.target;
     const f = new FormData(form);
-    const args = ["setup", "--repo", f.get("repo"), "--branch", f.get("branch"), "--token-stdin"];
-    if (f.get("subdir")) args.push("--subdir", f.get("subdir"));
-    if (f.get("user")) args.push("--user", f.get("user"));
-    run(args, form.closest(".card"), f.get("token") + "\n").then(refreshStatus);
+    // Empty fields keep the current setting (shown as the placeholder).
+    const val = name => f.get(name) || form.elements[name].placeholder;
+    const args = ["setup", "--repo", val("repo"), "--branch", f.get("branch"), "--token-stdin"];
+    args.push("--config", val("config"));
+    if (val("user")) args.push("--user", val("user"));
+    run(args, form.closest(".card"), f.get("token") + "\n").then(() => refreshStatus()).then(setupLoad);
     form.elements.token.value = "";
 });
+
+// Current setup as the form's placeholders (`lm-server config source`).
+function setupLoad() {
+    const form = document.getElementById("setup");
+    const fields = { REPO: "repo", CONFIG: "config", GITHUB_USER: "user" };
+    return cockpit.spawn(["/usr/bin/lm-server", "config", "source"], { superuser: "require", err: "ignore" })
+        .then(out => {
+            for (const line of out.split("\n")) {
+                const i = line.indexOf("=");
+                if (i < 0) continue;
+                const key = line.slice(0, i), value = line.slice(i + 1);
+                if (key === "BRANCH") form.elements.branch.value = value;
+                else if (fields[key] && value) form.elements[fields[key]].placeholder = value;
+            }
+        })
+        .catch(() => { /* not set up yet, or no admin access: keep the defaults */ });
+}
 
 // ---- lm-server.toml editor
 const configCard = document.getElementById("config");
@@ -115,6 +134,7 @@ configSave.addEventListener("click", () => {
 
 // Status first, then the history of automatic runs.
 async function autoRun() {
+    setupLoad();
     for (const b of document.querySelectorAll("button[data-auto]")) {
         await run(b.dataset.run.split(" "), b.closest(".card"));
     }

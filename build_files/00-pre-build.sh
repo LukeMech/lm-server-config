@@ -34,8 +34,11 @@ dnf5 -y install \
     util-linux \
     `# compressed swap in RAM (config: system_files/usr/lib/systemd/zram-generator.conf)` \
     zram-generator \
-    `# data disks (Cockpit > Storage): mdraid + XFS` \
+    `# data disks (Cockpit > Storage): mdraid + LVM + XFS, SMART health` \
+    lvm2 \
     mdadm \
+    smartmontools \
+    udisks2-lvm2 \
     xfsprogs \
     `# when running as a VM (Proxmox shows the IP, clean shutdown); idle on bare metal` \
     qemu-guest-agent
@@ -50,6 +53,13 @@ fi
 systemctl enable getty@tty1.service
 
 systemctl enable sshd.service NetworkManager.service podman.socket
+
+# Weekly read of the whole HDD mirror (mdadm's raid-check), repairs mismatches.
+if [[ -f /usr/lib/systemd/system/raid-check.timer ]]; then
+    systemctl enable raid-check.timer
+else
+    echo "warning: mdadm ships no raid-check.timer -- no periodic RAID check" >&2
+fi
 
 # Bound to the virtio-serial port the hypervisor adds (Proxmox: Options >
 # QEMU Guest Agent): starts at boot in a VM, never runs on bare metal.

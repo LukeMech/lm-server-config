@@ -38,8 +38,9 @@ adhoc_ephemeral = true
 # ------------------------------------------------------------------ services
 #
 # Data location: every service keeps its data in one folder. By default it's
-# on the system disk; `storage = "/var/mnt/<disk>"` in a section puts it on
-# that disk instead (mounted in Cockpit > Storage). Change it any time --
+# on the system disk; `storage = "/var/mnt/<path>"` in a section puts it in
+# exactly that folder instead: a disk or volume mounted there, or a folder on
+# one (Cockpit > Storage). One folder per service. Change it any time --
 # lm-server stops the service, copies the data over and starts it again.
 #
 # Resources: `cpus = 2` (cores, may be 0.5) and `memory = "4G"` cap a service
@@ -47,7 +48,7 @@ adhoc_ephemeral = true
 # usage: `lm-server services`.
 
 [disks]
-storage = "/var/mnt/hdd" # the HDD mirror
+storage = "/var/mnt/hdd-mirror/disks" # HDD RAID 1, LV "disks"
 # disk.lukemech.org (FileBrowser Quantum)
 filebrowser_admin = "admin"
 filebrowser_password = "CHANGE_ME"
@@ -55,8 +56,9 @@ filebrowser_password = "CHANGE_ME"
 syncthing_user = "admin"
 syncthing_password = "CHANGE_ME"
 # Shares: the top-level folders FileBrowser shows (default ["files"]). On the
-# disk: <storage>/disks/shares/<name>, next to the apps' own state in app/.
-shares = ["files", "docs"]
+# disk: <storage>/shares/<name>, next to the apps' own state in app/.
+# One share keeps everything in one tree (docs in files/docs).
+shares = ["files"]
 # Syncthing folders as <share>/<path>; created if missing. Use the folder IDs
 # your devices already share.
 syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
@@ -75,7 +77,7 @@ users = [{ email = "you@example.com", password = "CHANGE_ME" }]
 # Any ConvertX setting: env = { AUTO_DELETE_EVERY_N_HOURS = "24" }
 
 [immich]
-storage = "/var/mnt/hdd" # the HDD mirror
+storage = "/var/mnt/hdd-mirror/immich" # HDD RAID 1, LV "immich"
 cpus = 4
 memory = "6G"
 db_password = "CHANGE_ME" # letters and digits only

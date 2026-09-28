@@ -103,22 +103,26 @@ service, set `storage` in its section of `lm-server.toml`:
 
 ```toml
 [disks]
-storage = "/var/mnt/hdd"   # HDD mirror
+storage = "/var/mnt/hdd-mirror/disks"    # HDD RAID 1, LV "disks"
 [immich]
-storage = "/var/mnt/nvme"  # 2 TB NVMe
+storage = "/var/mnt/hdd-mirror/immich"   # HDD RAID 1, LV "immich"
 ```
 
-The service's data then lives in `<disk>/<service>/`, bind-mounted in place of
-its folder. If you change `storage` later, the next sync stops the service,
+The service's data then lives in exactly that folder, bind-mounted in place of
+`volumes/<service>/`. It can be a volume of its own mounted there (an LVM
+logical volume, see below), which gives the service a fixed size, or a plain
+folder on a disk (e.g. `/var/mnt/nvme/kuma`). Each service needs its own
+folder: two services on the same one (or one inside the other) is a config
+error. If you change `storage` later, the next sync stops the service,
 copies its data to the new disk (only if the target is empty), and starts it
 again. The old copy is never deleted automatically.
 
-For `[disks]` that gives, with `shares = ["files", "docs"]`:
+For `[disks]` that gives, with `shares = ["files"]`:
 
 ```
-/var/mnt/hdd/disks/
-  shares/files/     FileBrowser source "files" (Syncthing: files/Keepass, files/Sync)
-  shares/docs/      FileBrowser source "docs"
+/var/mnt/hdd-mirror/disks/
+  shares/files/     FileBrowser source "files" (Syncthing: files/Keepass,
+                    files/Sync; documents in files/docs)
   app/syncthing/    Syncthing config + keys (device ID)
   app/filebrowser/  FileBrowser database
 ```
@@ -126,9 +130,10 @@ For `[disks]` that gives, with `shares = ["files", "docs"]`:
 Both containers see the shares as `/shares/<name>`; in `lm-server.toml` you
 only write `<share>/<folder>`.
 
-**What happens on a `storage` change** (e.g. `/var/mnt/hdd` → `/var/mnt/nvme`):
+**What happens on a `storage` change** (e.g. `/var/mnt/hdd-mirror/immich` →
+`/var/mnt/nvme/immich`):
 1. The service is stopped.
-2. If `<new disk>/<service>/` is empty, the data is copied there (`rsync`,
+2. If the new folder is empty, the data is copied there (`rsync`,
    progress in Cockpit > lm-server > Automatic runs / `lm-server history`). If it
    already holds data, nothing is copied and that data is used as is.
 3. The folder is bind-mounted from the new place and the service starts again.
@@ -144,8 +149,8 @@ when restoring a backup:
 
 ```sh
 lm-server stop immich
-rsync -aHA --info=progress2 /var/lib/lm-server/volumes/immich/ /var/mnt/nvme/immich/
-# edit [immich] storage = "/var/mnt/nvme" (Cockpit editor or the repo)
+rsync -aHA --info=progress2 /var/lib/lm-server/volumes/immich/ /var/mnt/hdd-mirror/immich/
+# edit [immich] storage = "/var/mnt/hdd-mirror/immich" (Cockpit editor or the repo)
 lm-server sync      # target isn't empty -> no copy, just switch and start
 ```
 
@@ -159,21 +164,47 @@ slice `lm-server-<service>.slice`. Leave them out for no limit;
 `lm-server services` shows usage against the limit. Swap is **zram** (half of RAM,
 max 8 GiB, zstd), configured in `/usr/lib/systemd/zram-generator.conf`.
 
-Disks are set up in **Cockpit > Storage**. Cockpit writes `/etc/fstab`, and
-bootc keeps `/etc` across upgrades.
-- **NVMe**: format XFS, mount point `/var/mnt/nvme`.
-- **HDD mirror**: create a RAID device (MDRAID, RAID 1) from both disks, format
-  it XFS, mount point `/var/mnt/hdd`.
+Disks are set up once, by hand, in **Cockpit > Storage** (formatting wipes
+them). Cockpit writes `/etc/fstab`, and bootc keeps `/etc` across upgrades.
+Set the disks up **before** pointing `storage` at them: a sync against a path
+that isn't mounted yet writes to the system disk (and warns about it).
+
+- **HDD mirror**, split into a fixed-size volume per service:
+  1. *Create MDRAID device*: RAID 1, both HDDs, name `hdd-mirror`.
+  2. *Create LVM2 volume group* `hdd-mirror` on the new `/dev/md/hdd-mirror`.
+  3. In the group, *Create new logical volume* twice, each formatted **XFS**
+     and mounted at boot:
+     - `immich`, 400 GB, mount point `/var/mnt/hdd-mirror/immich`
+     - `disks`, 80 GB, mount point `/var/mnt/hdd-mirror/disks`
+
+     Leave the rest of the group unallocated. XFS can grow (Cockpit: *Grow*,
+     online) but never shrink, so spare space in the group is what lets either
+     volume grow later.
+  4. `storage = "/var/mnt/hdd-mirror/disks"` in `[disks]` and
+     `storage = "/var/mnt/hdd-mirror/immich"` in `[immich]`. Each service sees
+     its own volume, so FileBrowser shows ~80 GB as its maximum.
+- **NVMe**: format the whole disk **XFS**, mount point `/var/mnt/nvme`. No RAID.
 
 Suggested layout for this machine:
 
 | Disk | Use |
 |---|---|
 | 120 GB SSD (`sda`) | system (bootc), small services on the default `storage` |
-| 2 TB NVMe | `/var/mnt/nvme`: Immich (fast, room for the library) |
-| 2×500 GB HDD, RAID 1 | `/var/mnt/hdd`: disks (Keepass/Sync, redundant) |
+| 2×500 GB HDD, RAID 1 + LVM | `/var/mnt/hdd-mirror/immich` (400 GB), `/var/mnt/hdd-mirror/disks` (80 GB) |
+| 2 TB NVMe | `/var/mnt/nvme`: scratch space, staging for moves and restores |
 
 The NVMe is a single disk. Keep a backup of anything on it that you can't lose.
+
+**Health and replacing a disk** (Cockpit > Storage): the RAID device page shows
+its state (*Clean*, *Degraded*, *Recovering* with progress) and each member
+disk. To replace a failed HDD: *Remove* it from the RAID there, swap the disk,
+then *Add disk* on the same page; the rebuild starts on its own. Each drive's
+page shows its SMART assessment and can run a self-test; from a shell,
+`smartctl -a /dev/sdX`, `cat /proc/mdstat` and `mdadm --detail /dev/md/hdd-mirror`.
+Fedora's `raid-check.timer` reads the whole mirror weekly and repairs mismatches
+between the two disks. Unlike ZFS, mdraid + XFS has no checksums on the data,
+so it can't tell which copy is right if a disk returns bad data without
+reporting an error.
 
 ### Migrating from Proxmox
 
@@ -188,7 +219,8 @@ ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 2. The installer only asks for the system disk and the network (a static IP).
    Timezone, hostname and accounts all come from the config.
 3. After the reboot, tty1 asks for the secrets repo (no login needed):
-   owner/name, branch, GitHub username and a **fine-grained token** with
+   owner/name, branch, the path of the config file in the repo (default
+   `lm-server.toml`), GitHub username and a **fine-grained token** with
    *Contents: read-only*. GitHub doesn't accept account passwords for git.
    Until this succeeds there's no account to log in with, and the prompt comes
    back at every boot.
@@ -277,7 +309,7 @@ NetworkName=lm-server-kuma
 `lm-server.toml`
 ```toml
 [kuma]
-storage = "/var/mnt/nvme"   # optional, like cpus / memory
+storage = "/var/mnt/nvme/kuma"   # optional, like cpus / memory
 # any key becomes an env var: admin_email = "..." -> ADMIN_EMAIL
 ```
 
