@@ -44,5 +44,12 @@ test -x /usr/lib/systemd/system-generators/zram-generator
 /usr/libexec/lm-server/render.py services
 /usr/libexec/podman/quadlet -dryrun >/dev/null
 
+# Rebuild the initramfs: it carries its own copy of os-release (initrd-release),
+# so without this the initrd still prints "Welcome to Fedora Linux".
+kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
+DRACUT_NO_XATTR=1 dracut --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree -f \
+    "/usr/lib/modules/${kver}/initramfs.img"
+chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"
+
 dnf5 -y clean all
 rm -rf /var/lib/dnf
