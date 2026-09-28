@@ -155,32 +155,10 @@ Suggested layout for this machine:
 
 The NVMe is a single disk. Keep a backup of anything on it that you can't lose.
 
-### Migrating from Proxmox (ZFS `hdd-mirror`)
+### Migrating from Proxmox
 
-`hdd-mirror` (ZFS, 96.5% full) holds `subvol-100-disk-0/1` (disk_0, docs) and
-`vm-102-disk-0` (the Docker VM, which holds the Immich data). Fedora has no ZFS.
-The simplest path uses the mostly empty NVMe as a staging area, if whatever is
-on `NVME_2TB` now can go:
-
-1. On Proxmox, stop CT 100 and VM 102. Put a fresh XFS on the NVMe (or a new LV
-   on it), mount it at `/mnt/nvme`, then copy:
-   - `rsync -aHAX /hdd-mirror/subvol-100-disk-0/ /mnt/nvme/disks/disk_0/`
-   - `.../subvol-100-disk-1/` → `/mnt/nvme/disks/docs/`
-   - the old Syncthing config (with `cert.pem`/`key.pem`, to keep the device ID)
-     → `/mnt/nvme/disks/syncthing/`
-   - the FileBrowser DB → `/mnt/nvme/disks/filebrowser/`
-   - from VM 102: the Immich library → `/mnt/nvme/immich/library/`, plus dumps
-     of the Immich, Guacamole and Nightscout databases and ConvertX's data.
-2. Install lm-server on the SSD. In Cockpit > Storage, mount the NVMe at
-   `/var/mnt/nvme`, then wipe both HDDs and build the RAID 1 at `/var/mnt/hdd`.
-3. In `lm-server.toml`, first set `[disks] storage = "/var/mnt/nvme"` (the data
-   is already there). Later switch it to `"/var/mnt/hdd"`: lm-server moves it
-   to the mirror by itself.
-4. Restore the database dumps: Immich docs, *Backup and restore*;
-   `pg_restore` into `remote-db`; `mongorestore` into `sugar-mongo`.
-   Stop the service while you do (`lm-server stop <svc>`).
-
-VM 104 win11: `qemu-img convert` to qcow2, then import it in Cockpit > Virtual machines.
+Step by step, including Immich, disk_0/docs, Syncthing, FileBrowser and the
+ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 
 ## First install
 
