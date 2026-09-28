@@ -10,4 +10,4 @@ rm -f /etc/yum.repos.d/cloudflared.repo
 
 # Unit: lm-server-cloudflared.service (own name, so the package's unit, if
 # any, can't replace it) -- started by
-# lm-server once [cloudflared] tunnel_token is configured, not at boot by itself.
+# lm-server once [host] cloudflare_tunnel_token is set, not at boot by itself.

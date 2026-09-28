@@ -28,7 +28,7 @@ Everything lm-server needs to know about it comes from those files:
 
 With no custom renderer below, [<name>] in lm-server.toml renders to
 env/<name>/<name>.env (point the quadlet's EnvironmentFile= there):
-`env` defaults < top-level keys (tunnel_token -> TUNNEL_TOKEN) < `env = {...}`;
+`env` defaults < top-level keys (api_secret -> API_SECRET) < `env = {...}`;
 `users = [...]` goes to env/<name>/users.json for provision/<name>.sh.
 """
 
@@ -380,6 +380,13 @@ def cmd_render(toml_path, out_root):
         print(f"cannot read {toml_path}: {e}", file=sys.stderr)
         return 2
     services = catalog()
+    # The tunnel belongs to the host: [host] cloudflare_tunnel_token drives the
+    # cloudflared service (an explicit [cloudflared] section still works too).
+    token = cfg.get("host", {}).get("cloudflare_tunnel_token", "")
+    if isinstance(token, str) and token.startswith("CHANGE_ME"):
+        print("warning: host.cloudflare_tunnel_token is still CHANGE_ME -- no tunnel", file=sys.stderr)
+    elif token and "cloudflared" not in cfg:
+        cfg["cloudflared"] = {"tunnel_token": token}
     for key in cfg:
         if key not in services and key not in ("host", "updates"):
             print(f"warning: unknown section [{key}] ignored (no such service in this image)", file=sys.stderr)

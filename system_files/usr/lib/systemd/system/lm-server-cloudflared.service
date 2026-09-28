@@ -1,15 +1,15 @@
 [Unit]
 Description=Cloudflare Tunnel
 Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
-# Started by lm-server once [cloudflared] tunnel_token is set in lm-server.toml.
+# Started by lm-server once [host] cloudflare_tunnel_token is set in lm-server.toml.
 ConditionPathExists=/var/lib/lm-server/env/cloudflared/enabled
 Wants=network-online.target
 After=network-online.target
 
 [Service]
-# CPU/RAM limits: [cloudflared] cpus/memory in lm-server.toml.
+# Own slice, like every service (limits only via an explicit [cloudflared] section).
 Slice=lm-server-cloudflared.slice
-# TUNNEL_TOKEN from lm-server.toml. The published routes live in the
+# TUNNEL_TOKEN = [host] cloudflare_tunnel_token. The published routes live in the
 # Cloudflare dashboard and point at http://localhost:<port> (`lm-server routes`).
 EnvironmentFile=/var/lib/lm-server/env/cloudflared/cloudflared.env
 ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run

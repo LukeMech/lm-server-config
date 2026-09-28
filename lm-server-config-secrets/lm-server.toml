@@ -16,7 +16,10 @@ admin_password_hash = "CHANGE_ME"
 ssh_keys = [
     # "ssh-ed25519 AAAA... you@laptop",
 ]
-# Public address of Cockpit behind the Cloudflare Tunnel.
+# Cloudflare Tunnel (runs on the host, not as a service below).
+# Zero Trust > Networks > Tunnels > your tunnel > token. Empty = no tunnel.
+cloudflare_tunnel_token = "CHANGE_ME"
+# Public address of Cockpit behind the tunnel.
 cockpit_origins = ["https://proxmox.lukemech.org"]
 
 [updates]
@@ -41,10 +44,6 @@ adhoc_ephemeral = true
 # Resources: `cpus = 2` (cores, may be 0.5) and `memory = "4G"` cap a service
 # (all of its containers together); leave them out for no limit. Current
 # usage: `lm-server services`.
-
-[cloudflared]
-# Zero Trust > Networks > Tunnels > your tunnel > token.
-tunnel_token = "CHANGE_ME"
 
 [disks]
 storage = "/var/mnt/hdd" # the HDD mirror

@@ -23,7 +23,7 @@ Check these values before running anything.
 1. On the current Proxmox, create a VM: 4 GB RAM, 2 cores, a 40 GB disk on
    `NVME_2TB`, booting the ISO from the latest release.
 2. Install it. Point setup at the secrets repo with a **test** `lm-server.toml`:
-   different passwords, **no `[cloudflared]`** (don't take over the production
+   different passwords, **no `cloudflare_tunnel_token`** (don't take over the production
    tunnel).
 3. Check `lm-server status`, `lm-server services`, and Cockpit at
    `https://<vm-ip>:9090`. Web UIs listen on 127.0.0.1, so to open one use e.g.
@@ -146,7 +146,7 @@ Do not touch the ZFS pool. Then run `poweroff`.
 2. In the secrets repo's `lm-server.toml`:
    - **comment out `[immich]` for now** (it's restored in step 6);
    - set `[disks] storage = "/var/mnt/nvme"`;
-   - fill in the rest, including `[cloudflared]` with the existing tunnel token.
+   - fill in the rest, including `[host] cloudflare_tunnel_token` with the existing tunnel token.
 3. After the reboot, give tty1 the repo and the token.
 4. Cockpit > **Storage**: activate the NVMe VG if needed. On LV `lmdata`, choose
    **Mount**: mount point `/var/mnt/nvme`, mount at boot. **Do not format it.**
