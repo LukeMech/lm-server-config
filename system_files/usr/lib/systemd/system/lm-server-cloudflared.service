@@ -1,0 +1,33 @@
+[Unit]
+Description=Cloudflare Tunnel
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+# Started by lm-server once [cloudflared] tunnel_token is set in lm-server.toml.
+ConditionPathExists=/var/lib/lm-server/env/cloudflared/enabled
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# TUNNEL_TOKEN from lm-server.toml. The published routes live in the
+# Cloudflare dashboard and point at http://localhost:<port> (`lm-server routes`).
+EnvironmentFile=/var/lib/lm-server/env/cloudflared/cloudflared.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=always
+RestartSec=5s
+TimeoutStartSec=0
+
+# Needs nothing but outbound network.
+DynamicUser=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native

@@ -27,7 +27,7 @@ containers together. The quadlets live in one folder per service:
 
 | Service | Unit | Containers | Route → local |
 |---|---|---|---|
-| cloudflared | `cloudflared` | cloudflared (host network) | — |
+| cloudflared | `lm-server-cloudflared` | — (part of the system: RPM + systemd unit, updated with the image) | — |
 | disks | `disks-pod` | filebrowser, syncthing | disk → `:8001`, syncdisks → `:8384` |
 | toolbox | `toolbox` | lm-server-webapp | toolbox → `:6600` |
 | website | `website` | lm-server-webapp | lukemech.org → `:3000` |

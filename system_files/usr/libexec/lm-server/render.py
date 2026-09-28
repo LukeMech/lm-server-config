@@ -39,7 +39,7 @@ CHECK_ONLY = False  # `check`: validate without side effects (no podman)
 SERVICES = {
     "cloudflared": {
         "desc": "Cloudflare Tunnel",
-        "units": ["cloudflared"],
+        "units": ["lm-server-cloudflared"],
         "routes": {"proxmox.lukemech.org": "https://localhost:9090"},
     },
     "disks": {
