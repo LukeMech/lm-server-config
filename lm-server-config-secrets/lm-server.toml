@@ -4,7 +4,8 @@
 # CHANGE_ME. A service runs only if its [section] is present; delete a section
 # to stop that service. A section that still has CHANGE_ME (or misses a
 # required key) is not started -- `lm-server sync` / Cockpit says what's wrong.
-# Changes are picked up within 5 minutes; only changed services restart.
+# Changes are picked up on the [updates] config schedule (or at once with
+# `lm-server config pull` / Cockpit > Sync configs); only changed services restart.
 
 [host]
 hostname = "lm-server"
@@ -24,6 +25,9 @@ cockpit_origins = ["https://proxmox.lukemech.org"]
 system = "manual"
 # When to pull newer container images (restarts only what changed), or "manual".
 containers = "daily"
+# When to pull this file from GitHub and apply it. "manual" = only at boot and
+# on demand (`lm-server config pull`, Cockpit > Sync configs).
+config = "hourly"
 # Remove containers created by hand (Cockpit/podman run) at every boot.
 adhoc_ephemeral = true
 

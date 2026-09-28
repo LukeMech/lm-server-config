@@ -55,35 +55,41 @@ else
     systemctl try-restart cockpit.service || true
 fi
 
-# Schedules are systemd timers (OnCalendar syntax: "daily", "Sun 04:00",
-# "*-*-* 03:00"; check one with `systemd-analyze calendar '<value>'`).
-# "manual" turns the timer off.
-reload=0
-# schedule <timer> <value>
+# Schedules are systemd timers (OnCalendar syntax: "hourly", "daily",
+# "Sun 04:00", "*-*-* 03:00"; check one with `systemd-analyze calendar '<value>'`).
+# "manual": system/container updates off; config sync only at boot + on demand.
+CHANGED=()
+# schedule <timer> <value> [boot-sync]
 schedule() {
-    local timer=$1 value=$2 dropin="/etc/systemd/system/$1.d/10-lm-server.conf"
+    local timer=$1 value=$2 dropin="/etc/systemd/system/$1.d/10-lm-server.conf" want
     if [[ ${value} == manual || ${value} == off ]]; then
-        systemctl disable --now "${timer}" 2>/dev/null || true
-        return
+        if [[ -z ${3:-} ]]; then
+            systemctl disable --now "${timer}" 2>/dev/null || true
+            return
+        fi
+        want=$(printf '[Timer]\nOnCalendar=\n') # keeps OnBootSec only
+    else
+        systemd-analyze calendar "${value}" >/dev/null 2>&1 || {
+            lms_log "invalid schedule for ${timer}: ${value}"
+            return
+        }
+        want=$(printf '[Timer]\nOnCalendar=\nOnCalendar=%s\n' "${value}")
     fi
-    systemd-analyze calendar "${value}" >/dev/null || {
-        lms_log "invalid schedule for ${timer}: ${value}"
-        return
-    }
-    local want
-    want=$(printf '[Timer]\nOnCalendar=\nOnCalendar=%s\n' "${value}")
     if [[ $(cat "${dropin}" 2>/dev/null) != "${want}" ]]; then
         mkdir -p "${dropin%/*}"
         printf '%s\n' "${want}" >"${dropin}"
-        reload=1
+        CHANGED+=("${timer}")
+    elif ! systemctl is-active -q "${timer}"; then
+        CHANGED+=("${timer}")
     fi
-    ENABLE+=("${timer}")
 }
-ENABLE=()
 schedule lm-server-upgrade.timer "${H[SYSTEM_UPDATES]:-manual}"
 schedule podman-auto-update.timer "${H[CONTAINER_UPDATES]:-daily}"
-((reload)) && systemctl daemon-reload
-for t in "${ENABLE[@]}"; do
-    systemctl enable "${t}" >/dev/null 2>&1 || true
-    systemctl restart "${t}"
-done
+schedule lm-server-sync.timer "${H[CONFIG_UPDATES]:-hourly}" boot-sync
+if ((${#CHANGED[@]})); then
+    systemctl daemon-reload
+    for t in "${CHANGED[@]}"; do
+        systemctl enable "${t}" >/dev/null 2>&1 || true
+        systemctl restart "${t}"
+    done
+fi

@@ -79,7 +79,7 @@ every boot, which includes every system upgrade. Turn this off with
 |---|---|---|
 | System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
 | Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), Cockpit | `[updates] containers`, default `"daily"` |
-| Configs | `lm-server sync`, Cockpit *Sync configs* | every 5 min |
+| Configs (lm-server.toml) | `lm-server config pull` (= `sync`), Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
 
 **Editing the config from Cockpit**: *Configuration (lm-server.toml)* loads
 the file from the secrets repo. *Save, push & apply* checks it, commits and

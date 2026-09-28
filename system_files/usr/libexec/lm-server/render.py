@@ -363,6 +363,7 @@ def r_host(cfg, out):
         "COCKPIT_ORIGINS": " ".join(host.get("cockpit_origins", [])),
         "SYSTEM_UPDATES": updates.get("system", "manual"),
         "CONTAINER_UPDATES": updates.get("containers", "daily"),
+        "CONFIG_UPDATES": updates.get("config", "hourly"),
         "ADHOC_EPHEMERAL": scalar(updates.get("adhoc_ephemeral", True)),
     }
     out.write("host.env", env_file(env))

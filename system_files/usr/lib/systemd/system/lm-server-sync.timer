@@ -1,10 +1,13 @@
 [Unit]
-Description=lm-server: poll the secrets repo for config changes
+Description=lm-server: pull configs from the secrets repo and apply them
 
 [Timer]
+# Always once shortly after boot; then on the [updates] config schedule
+# (default hourly, "manual" = boot only -- apply-host.sh writes a drop-in).
 OnBootSec=1min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30s
+OnCalendar=hourly
+RandomizedDelaySec=2min
+Persistent=true
 
 [Install]
 WantedBy=timers.target

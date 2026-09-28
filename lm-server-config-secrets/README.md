@@ -11,9 +11,10 @@ The whole server config is one file: [`lm-server.toml`](lm-server.toml).
 4. Enter the repo name and the token when the server asks at first boot (or
    later with `sudo lm-server setup`, or Cockpit > lm-server).
 
-After that, a commit to the repo is all it takes. Within 5 minutes the server
-pulls it and restarts only the services whose settings changed. To apply at once,
-run `lm-server sync` or click **Sync configs** in Cockpit.
+After that, commit to the repo. The server pulls it on the `[updates] config`
+schedule (default hourly; `"manual"` means only at boot) and restarts only the
+services whose settings changed. To apply at once, run `lm-server config pull`
+or click **Sync configs** in Cockpit.
 
 Never put real values in this public folder. To try the template, point setup at
 `LukeMech/lm-server-config`, folder `lm-server-config-secrets`. Because the values are still
