@@ -7,10 +7,12 @@
 #   APP_MODULE           gunicorn app, e.g. server:app (required)
 #   APP_PORT             listen port (required)
 #   APP_GITHUB_TOKEN     token for private repos (+ APP_GITHUB_USER)
-#   APP_PIP_PACKAGES     extra pip packages (besides requirements.txt)
 #   APP_BUILD_CMD        run after every pull (e.g. rendercv render ...)
 #   APP_WORKERS          gunicorn workers, default 2
 #   APP_UPDATE_INTERVAL  seconds between pulls, default 180
+#
+# Nothing is pip-installed per site: every package the sites need is in the
+# image (see Containerfile), so a site's requirements.txt is not used.
 set -euo pipefail
 
 : "${APP_REPO:?APP_REPO is required}" "${APP_MODULE:?}" "${APP_PORT:?}"
@@ -18,7 +20,6 @@ APP_BRANCH=${APP_BRANCH:-main}
 APP_WORKERS=${APP_WORKERS:-2}
 APP_UPDATE_INTERVAL=${APP_UPDATE_INTERVAL:-180}
 APP=/data/app
-VENV=/data/venv
 
 git_() {
     if [[ -n ${APP_GITHUB_TOKEN:-} ]]; then
@@ -45,23 +46,17 @@ cd "${APP}"
 rev=$(git rev-parse HEAD)
 echo "webapp: ${APP_REPO}@${rev:0:12}"
 
-[[ -x ${VENV}/bin/python ]] || python3 -m venv --system-site-packages "${VENV}"
-pip_state="$(sha256sum requirements.txt 2>/dev/null || true) ${APP_PIP_PACKAGES:-}"
-if [[ ${pip_state} != "$(cat /data/.pip-state 2>/dev/null || true)" ]]; then
-    [[ -f requirements.txt ]] && "${VENV}/bin/pip" install -q -r requirements.txt
-    # shellcheck disable=SC2086 # word splitting intended: a package list
-    [[ -n ${APP_PIP_PACKAGES:-} ]] && "${VENV}/bin/pip" install -q ${APP_PIP_PACKAGES}
-    echo "${pip_state}" >/data/.pip-state
-fi
+# Per-site virtualenv of older image versions.
+rm -rf /data/venv /data/.pip-state
 
 if [[ -d translations ]]; then
     pybabel compile -f -d translations >/dev/null || echo "webapp: pybabel compile failed" >&2
 fi
 if [[ -n ${APP_BUILD_CMD:-} ]]; then
-    PATH="${VENV}/bin:${PATH}" bash -c "${APP_BUILD_CMD}"
+    bash -c "${APP_BUILD_CMD}"
 fi
 
-"${VENV}/bin/python" -m gunicorn --bind "0.0.0.0:${APP_PORT}" --workers "${APP_WORKERS}" \
+python3 -m gunicorn --bind "0.0.0.0:${APP_PORT}" --workers "${APP_WORKERS}" \
     --access-logfile - "${APP_MODULE}" &
 pid=$!
 trap 'kill -TERM "${pid}" 2>/dev/null; wait "${pid}"; exit 0' TERM INT

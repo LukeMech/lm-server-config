@@ -3,7 +3,6 @@
 # lm-server: env APP_REPO=LukeMech/CV
 # lm-server: env APP_MODULE=server:app
 # lm-server: env APP_PORT=7999
-# lm-server: env APP_PIP_PACKAGES=rendercv[full]
 # lm-server: env APP_BUILD_CMD=rendercv render Łukasz_Błaszczyk_CV_EN.yaml
 # lm-server: env APP_GITHUB_TOKEN={{github_token}}
 # lm-server: env APP_GITHUB_USER={{github_user}}

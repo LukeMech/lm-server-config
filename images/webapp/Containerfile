@@ -14,6 +14,12 @@ RUN dnf5 -y install --setopt=install_weak_deps=False \
         python3-pip \
     && dnf5 -y clean all
 
+# Everything the sites need that Fedora doesn't package -- one image for all
+# of them, nothing is installed per site at start:
+#   exp (LukeMech/CV): rendercv renders the CV at every pull
+RUN pip install --no-cache-dir --root-user-action=ignore 'rendercv[full]' \
+    && rendercv --version
+
 COPY entrypoint.sh /usr/local/bin/lm-server-webapp
 RUN chmod 0755 /usr/local/bin/lm-server-webapp
 
