@@ -172,14 +172,21 @@ ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 1. Download `lm-server-<tag>.iso` from the latest release. If it was split
    (>2 GB), join it with `cat lm-server-*.iso.part-* > lm-server.iso`, then check
    it against the `.sha256`.
-2. In the installer, set the system disk, network (a static IP), timezone and an
-   admin user.
-3. After the reboot, tty1 asks for the secrets repo: owner/name, branch, GitHub
-   username and a **fine-grained token** with *Contents: read-only*. GitHub doesn't
-   accept account passwords for git. You can skip this step and do it later in
-   Cockpit > lm-server.
-4. The server fetches `lm-server.toml`, applies `[host]`, then starts the
-   configured services and creates their users.
+2. In the installer, set the system disk, network (a static IP) and timezone.
+   There's no user step: accounts come from the config.
+3. After the reboot, tty1 asks for the secrets repo (no login needed):
+   owner/name, branch, GitHub username and a **fine-grained token** with
+   *Contents: read-only*. GitHub doesn't accept account passwords for git.
+   Until this succeeds there's no account to log in with, and the prompt comes
+   back at every boot.
+4. The server fetches `lm-server.toml` and applies `[host]`: it creates the
+   admin (`admin_user` / `admin_password_hash`) for Cockpit and sudo, plus SSH
+   keys. Then it starts the configured services and creates their users.
+
+Locked out (the config never applied)? In the GRUB menu, press `e` and add
+`systemd.setenv=SYSTEMD_SULOGIN_FORCE=1 systemd.unit=rescue.target` to the
+`linux` line. That boots to a root shell. Then run `lm-server setup`, then
+`systemctl default`.
 
 ## CLI
 

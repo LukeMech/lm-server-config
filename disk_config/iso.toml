@@ -3,23 +3,31 @@
 # The ISO embeds the image it was built from; %post re-points the installed
 # system at the registry so `bootc upgrade` / `lm-server upgrade` pull from
 # GHCR -- with signature verification (policy.json + cosign key in the image).
+#
+# No user is created here: root stays locked, and the first boot asks for the
+# secrets repo on tty1 (no login needed). The config then creates the admin
+# ([host] admin_user / admin_password_hash) used for Cockpit and sudo.
+# Recovery if that never happens: boot with
+#   systemd.setenv=SYSTEMD_SULOGIN_FORCE=1 systemd.unit=rescue.target
 [customizations.installer.kickstart]
 contents = """
+rootpw --lock
+
 %post
 bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ghcr.io/lukemech/lm-server:latest
 %end
 """
 
-# Interactive: disk layout, network (static IP for the server), timezone and
-# the first admin user (Cockpit login until the secrets repo takes over).
+# Asked in the installer: disk layout, network (static IP for the server) and
+# timezone. Users are left to lm-server.toml.
 [customizations.installer.modules]
 enable = [
   "org.fedoraproject.Anaconda.Modules.Storage",
   "org.fedoraproject.Anaconda.Modules.Network",
   "org.fedoraproject.Anaconda.Modules.Timezone",
-  "org.fedoraproject.Anaconda.Modules.Users",
   "org.fedoraproject.Anaconda.Modules.Security",
 ]
 disable = [
+  "org.fedoraproject.Anaconda.Modules.Users",
   "org.fedoraproject.Anaconda.Modules.Subscription",
 ]
