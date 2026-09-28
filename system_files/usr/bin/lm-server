@@ -168,10 +168,30 @@ setup_save() {
         lms_env_line GITHUB_USER "${user}"
         lms_env_line GITHUB_TOKEN "${token}"
     } >"${tmp}"
+    local old=""
+    if [[ -f ${LMS_SECRETS_ENV} ]]; then
+        old="${LMS_SECRETS_ENV}.old"
+        cp -p "${LMS_SECRETS_ENV}" "${old}"
+    fi
     mv -f "${tmp}" "${LMS_SECRETS_ENV}"
     lms_log "saved -- pulling configs and starting services"
     systemctl start --no-block lm-server-prune-adhoc.service lm-server-services.service || true
-    cmd_sync --force
+    # Subshell: a fatal sync error (lms_die) must come back here, not exit.
+    local rc=0
+    (cmd_sync --force) || rc=$?
+    # 0 = all applied, 3 = some services skipped (warned above): setup is
+    # done either way. Anything else (no lm-server.toml in that repo/folder,
+    # unreadable file): undo, so the question comes back.
+    if ((rc == 0 || rc == 3)); then
+        rm -f "${old}"
+        return 0
+    fi
+    if [[ -n ${old} ]]; then
+        mv -f "${old}" "${LMS_SECRETS_ENV}"
+    else
+        rm -f "${LMS_SECRETS_ENV}"
+    fi
+    return 1
 }
 
 # ------------------------------------------------------------------ sync
@@ -222,11 +242,15 @@ cmd_sync() {
     mv "${new}/host" "${LMS_ENV}/host"
     "${LMS_LIBEXEC}/apply-host.sh" || lms_log "warning: host settings not fully applied"
 
-    local svc failed=0
+    local svc skipped=()
     for svc in $(lms_services); do
         if [[ -f ${new}/.errors/${svc} ]]; then
-            lms_log "${svc}: $(cat "${new}/.errors/${svc}") -- keeping the previous config"
-            failed=1
+            if lms_enabled "${svc}"; then
+                lms_log "${svc}: $(cat "${new}/.errors/${svc}") -- keeping the previous config"
+            else
+                lms_log "${svc}: $(cat "${new}/.errors/${svc}") -- not started"
+            fi
+            skipped+=("${svc}")
             continue
         fi
         apply_service "${svc}" "${new}/${svc}" "${force}"
@@ -235,7 +259,12 @@ cmd_sync() {
 
     git -C "${LMS_REPO_DIR}" rev-parse HEAD >"${LMS_STATE}/config.rev"
     date -Is >"${LMS_STATE}/config.synced"
-    return "${failed}"
+    # 3 = synced, but these services are unavailable until their section is fixed.
+    if ((${#skipped[@]})); then
+        lms_log "warning: skipped ${skipped[*]} -- fix lm-server.toml, then: lm-server config pull"
+        return 3
+    fi
+    return 0
 }
 
 # apply_service <svc> <rendered-dir> <force>: swaps in the new config and

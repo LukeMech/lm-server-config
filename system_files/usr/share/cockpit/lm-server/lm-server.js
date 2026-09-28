@@ -29,6 +29,11 @@ function run(args, card, input) {
             return true;
         })
         .catch(ex => {
+            // Exit 3 (sync): applied, but some services were skipped -- see above.
+            if (ex.exit_status === 3) {
+                log.textContent += "\n⚠ done, some services skipped (see above)";
+                return true;
+            }
             log.textContent += "\n✘ failed: " + (ex.message || ex);
             log.classList.add("failed");
             return false;
