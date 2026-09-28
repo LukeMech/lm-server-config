@@ -50,3 +50,7 @@ fi
 systemctl enable getty@tty1.service
 
 systemctl enable sshd.service NetworkManager.service podman.socket
+
+# Bound to the virtio-serial port the hypervisor adds (Proxmox: Options >
+# QEMU Guest Agent): starts at boot in a VM, never runs on bare metal.
+systemctl enable qemu-guest-agent.service
