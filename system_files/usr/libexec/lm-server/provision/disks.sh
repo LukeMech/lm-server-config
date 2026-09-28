@@ -40,7 +40,7 @@ for ((i = 0; i < count; i++)); do
     podman run --rm --user 0:0 \
         -e FILEBROWSER_CONFIG=/home/filebrowser/config/config.yaml \
         -v "${ENVDIR}/filebrowser:/home/filebrowser/config:ro,Z" \
-        -v "${LMS_STATE}/data/disks/filebrowser:/home/filebrowser/data:Z" \
+        -v "${LMS_VOLUMES}/disks/filebrowser:/home/filebrowser/data:Z" \
         --entrypoint ./filebrowser "${image}" \
         set -u "${login},${pass}" -c /home/filebrowser/config/config.yaml ||
         lms_log "disks: filebrowser user ${login} failed"

@@ -88,53 +88,66 @@ each timer, and Cockpit > lm-server > *Automatic runs* shows what they did.
 
 ## Disks
 
-The data disk is mounted at **`/var/mnt/data`**. Services use these folders on it:
-`disk_0/`, `docs/` (FileBrowser and Syncthing) and `immich/`. They are created
-automatically. Set the disk up in **Cockpit > Storage**:
-1. For a mirror, create a RAID device (MDRAID, RAID 1) from the two disks.
-2. Format it (XFS) with mount point `/var/mnt/data`.
+Every service keeps all of its data in one folder,
+`/var/lib/lm-server/volumes/<service>/`. That's the Immich library and database,
+FileBrowser/Syncthing's `disk_0/` and `docs/`, the Guacamole DB, and so on. By
+default the folder is on the system disk. To use a different disk for a
+service, set `storage` in its section of `lm-server.toml`:
 
-Cockpit writes `/etc/fstab`, and bootc keeps `/etc` across upgrades. Until a
-disk is mounted there, the folders sit on the system disk.
+```toml
+[disks]
+storage = "/var/mnt/hdd"   # HDD mirror
+[immich]
+storage = "/var/mnt/nvme"  # 2 TB NVMe
+```
+
+The service's data then lives in `<disk>/<service>/`, bind-mounted in place of
+its folder. If you change `storage` later, the next sync stops the service,
+copies its data to the new disk (only if the target is empty), and starts it
+again. The old copy is never deleted automatically.
+
+Disks are set up in **Cockpit > Storage**. Cockpit writes `/etc/fstab`, and
+bootc keeps `/etc` across upgrades.
+- **NVMe**: format XFS, mount point `/var/mnt/nvme`.
+- **HDD mirror**: create a RAID device (MDRAID, RAID 1) from both disks, format
+  it XFS, mount point `/var/mnt/hdd`.
+
+Suggested layout for this machine:
+
+| Disk | Use |
+|---|---|
+| 120 GB SSD (`sda`) | system (bootc), small services on the default `storage` |
+| 2 TB NVMe | `/var/mnt/nvme`: Immich (fast, room for the library) |
+| 2×500 GB HDD, RAID 1 | `/var/mnt/hdd`: disks (Keepass/Sync, redundant) |
+
+The NVMe is a single disk. Keep a backup of anything on it that you can't lose.
 
 ### Migrating from Proxmox (ZFS `hdd-mirror`)
 
-`hdd-mirror` is a ZFS mirror holding `subvol-100-disk-0/1` (disk_0, docs) and
+`hdd-mirror` (ZFS, 96.5% full) holds `subvol-100-disk-0/1` (disk_0, docs) and
 `vm-102-disk-0` (the Docker VM, which holds the Immich data). Fedora has no ZFS.
-The recommended path is to switch the mirror to mdraid + XFS in place, one disk
-at a time. Take a **backup first**: redundancy is gone during the copy.
+The simplest path uses the mostly empty NVMe as a staging area, if whatever is
+on `NVME_2TB` now can go:
 
-1. On Proxmox, stop CT 100 and VM 102, then run `zpool detach hdd-mirror <disk2>`.
-   The pool keeps running on one disk.
-2. Create a degraded RAID 1 on disk 2 and format it:
-   `mdadm --create /dev/md0 --level=1 --raid-devices=2 <disk2> missing`, then
-   `mkfs.xfs /dev/md0` and mount it (e.g. `/mnt/new`).
-3. Copy the data:
-   - `rsync -aHAX /hdd-mirror/subvol-100-disk-0/ /mnt/new/disk_0/`, and the same
-     for `disk-1` → `docs/`.
-   - For Immich, mount the VM disk read-only (`/dev/zvol/hdd-mirror/vm-102-disk-0`)
-     and copy the library to `/mnt/new/immich/`.
-   - Dump the databases in VM 102 (see below).
-4. Install lm-server. In Cockpit > Storage, mount `md0` at `/var/mnt/data`.
-5. Once everything works, `zpool destroy`, then
-   `mdadm --add /dev/md0 <disk1>`. The mirror rebuilds itself.
+1. On Proxmox, stop CT 100 and VM 102. Put a fresh XFS on the NVMe (or a new LV
+   on it), mount it at `/mnt/nvme`, then copy:
+   - `rsync -aHAX /hdd-mirror/subvol-100-disk-0/ /mnt/nvme/disks/disk_0/`
+   - `.../subvol-100-disk-1/` → `/mnt/nvme/disks/docs/`
+   - the old Syncthing config (with `cert.pem`/`key.pem`, to keep the device ID)
+     → `/mnt/nvme/disks/syncthing/`
+   - the FileBrowser DB → `/mnt/nvme/disks/filebrowser/`
+   - from VM 102: the Immich library → `/mnt/nvme/immich/library/`, plus dumps
+     of the Immich, Guacamole and Nightscout databases and ConvertX's data.
+2. Install lm-server on the SSD. In Cockpit > Storage, mount the NVMe at
+   `/var/mnt/nvme`, then wipe both HDDs and build the RAID 1 at `/var/mnt/hdd`.
+3. In `lm-server.toml`, first set `[disks] storage = "/var/mnt/nvme"` (the data
+   is already there). Later switch it to `"/var/mnt/hdd"`: lm-server moves it
+   to the mirror by itself.
+4. Restore the database dumps: Immich docs, *Backup and restore*;
+   `pg_restore` into `remote-db`; `mongorestore` into `sugar-mongo`.
+   Stop the service while you do (`lm-server stop <svc>`).
 
-The pool is 96.5% full (466 of 483 GB). The 400 GB VM disk holds much less
-real data, but check `du` inside VM 102 before copying.
-
-Other state:
-
-| Old | New |
-|---|---|
-| CT 100 syncthing config | `/var/lib/lm-server/data/disks/syncthing/` (**with `cert.pem`/`key.pem`**, to keep the device ID) |
-| CT 100 filebrowser db | `/var/lib/lm-server/data/disks/filebrowser/database.db` |
-| VM 102 immich DB | dump → restore (Immich docs: *Backup and restore*) |
-| VM 102 guacamole DB | `pg_dump` → restore into `remote-db` (keeps connections) |
-| VM 102 nightscout | `mongodump` → `mongorestore` into `sugar-mongo` |
-| VM 102 convertx | `/var/lib/lm-server/data/convert/` |
-| VM 104 win11 | `qemu-img convert` → qcow2, import in Cockpit > Virtual machines |
-
-Stop a service while copying its data (`lm-server stop <svc>`), then start it again.
+VM 104 win11: `qemu-img convert` to qcow2, then import it in Cockpit > Virtual machines.
 
 ## First install
 

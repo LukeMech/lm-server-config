@@ -4,8 +4,8 @@
 [Unit]
 Description=immich: Immich
 ConditionPathExists=/var/lib/lm-server/env/immich/enabled
-# Wait for the data disk if one is mounted there (Cockpit > Storage).
-RequiresMountsFor=/var/mnt/data
+# Its data (bind-mounted from the `storage` disk, if one is set).
+RequiresMountsFor=/var/lib/lm-server/volumes/immich
 
 [Pod]
 PodName=immich

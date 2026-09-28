@@ -4,6 +4,8 @@
 [Unit]
 Description=remote: Apache Guacamole
 ConditionPathExists=/var/lib/lm-server/env/remote/enabled
+# Its data (bind-mounted from the `storage` disk, if one is set).
+RequiresMountsFor=/var/lib/lm-server/volumes/remote
 
 [Pod]
 PodName=remote

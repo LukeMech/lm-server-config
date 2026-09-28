@@ -7,7 +7,7 @@ ContainerName=sugar-mongo
 Pod=sugar.pod
 # Nightscout's documented version; not auto-updated (on-disk data format).
 Image=docker.io/library/mongo:4.4
-Volume=/var/lib/lm-server/data/sugar/mongo:/data/db:Z
+Volume=/var/lib/lm-server/volumes/sugar/mongo:/data/db:Z
 NoNewPrivileges=true
 
 [Service]

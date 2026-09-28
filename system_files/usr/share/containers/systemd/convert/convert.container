@@ -1,6 +1,7 @@
 [Unit]
 Description=convert: convert
 ConditionPathExists=/var/lib/lm-server/env/convert/enabled
+RequiresMountsFor=/var/lib/lm-server/volumes/convert
 
 [Container]
 ContainerName=convert
@@ -9,7 +10,7 @@ AutoUpdate=registry
 Network=convert.network
 PublishPort=127.0.0.1:3001:3000
 EnvironmentFile=/var/lib/lm-server/env/convert/convertx.env
-Volume=/var/lib/lm-server/data/convert:/app/data:Z
+Volume=/var/lib/lm-server/volumes/convert:/app/data:Z
 NoNewPrivileges=true
 
 [Service]

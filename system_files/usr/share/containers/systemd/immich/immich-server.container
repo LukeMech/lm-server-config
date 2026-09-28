@@ -10,7 +10,7 @@ Pod=immich.pod
 Image=ghcr.io/immich-app/immich-server:release
 AutoUpdate=registry
 EnvironmentFile=/var/lib/lm-server/env/immich/server.env
-Volume=/var/mnt/data/immich:/data:Z
+Volume=/var/lib/lm-server/volumes/immich/library:/data:Z
 Volume=/etc/localtime:/etc/localtime:ro
 NoNewPrivileges=true
 

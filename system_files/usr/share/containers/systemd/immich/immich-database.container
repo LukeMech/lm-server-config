@@ -10,7 +10,7 @@ Image=ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
 EnvironmentFile=/var/lib/lm-server/env/immich/database.env
 Environment=POSTGRES_INITDB_ARGS=--data-checksums
 ShmSize=128m
-Volume=/var/lib/lm-server/data/immich/postgres:/var/lib/postgresql/data:Z
+Volume=/var/lib/lm-server/volumes/immich/postgres:/var/lib/postgresql/data:Z
 NoNewPrivileges=true
 
 [Service]

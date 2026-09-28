@@ -4,8 +4,8 @@
 [Unit]
 Description=disks: FileBrowser Quantum + Syncthing
 ConditionPathExists=/var/lib/lm-server/env/disks/enabled
-# Wait for the data disk if one is mounted there (Cockpit > Storage).
-RequiresMountsFor=/var/mnt/data
+# Its data (bind-mounted from the `storage` disk, if one is set).
+RequiresMountsFor=/var/lib/lm-server/volumes/disks
 
 [Pod]
 PodName=disks

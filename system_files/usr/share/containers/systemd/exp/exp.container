@@ -1,6 +1,7 @@
 [Unit]
 Description=exp: exp
 ConditionPathExists=/var/lib/lm-server/env/exp/enabled
+RequiresMountsFor=/var/lib/lm-server/volumes/exp
 
 [Container]
 ContainerName=exp
@@ -12,7 +13,7 @@ PublishPort=127.0.0.1:7999:7999
 EnvironmentFile=/var/lib/lm-server/env/exp/app.env
 # Own user namespace: root in here is an unprivileged uid on the host.
 UserNS=auto
-Volume=/var/lib/lm-server/data/exp:/data:Z,U
+Volume=/var/lib/lm-server/volumes/exp:/data:Z,U
 ReadOnly=true
 Tmpfs=/tmp
 DropCapability=ALL

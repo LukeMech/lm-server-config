@@ -222,6 +222,7 @@ apply_service() {
         return 0
     fi
 
+    apply_storage "${svc}" "${src}"
     rm -rf "${dst}"
     mv "${src}" "${dst}"
     touch "${dst}/enabled"
@@ -230,6 +231,66 @@ apply_service() {
     systemctl restart --no-block "${units[@]}"
     if [[ -x ${LMS_LIBEXEC}/provision/${svc}.sh ]]; then
         systemctl restart --no-block "lm-server-provision@${svc}.service"
+    fi
+}
+
+# apply_storage <svc> <rendered-dir>: all data of a service lives in
+# volumes/<svc>. With `storage = "/var/mnt/<disk>"` that's a bind mount of
+# <disk>/<svc>; on a change the service is stopped and its data copied over
+# (only into an empty target -- the old copy is kept, never deleted).
+# Called from apply_service (its ${units[@]} are in scope).
+apply_storage() {
+    local svc=$1 src=$2 vol="${LMS_VOLUMES}/$1"
+    local want="" cur="" unit file
+    [[ -f ${src}/storage ]] && want=$(<"${src}/storage")
+    unit=$(systemd-escape -p --suffix=mount "${vol}")
+    file="/etc/systemd/system/${unit}"
+    [[ -f ${file} ]] && cur=$(sed -n 's/^What=//p' "${file}")
+    mkdir -p "${vol}"
+
+    if [[ ${want} != "${cur}" ]]; then
+        lms_log "${svc}: data location ${cur:-system disk} -> ${want:-system disk}"
+        systemctl stop "${units[@]}" 2>/dev/null || true
+        if [[ -n ${cur} ]]; then
+            systemctl disable --now "${unit}" || true
+            rm -f "${file}"
+        fi
+        if [[ -n ${want} ]]; then
+            mountpoint -q "${want%/*}" ||
+                lms_log "${svc}: warning: ${want%/*} is not a mounted disk (Cockpit > Storage) -- using the system disk"
+            mkdir -p "${want}"
+        fi
+        local from=${cur:-${vol}} to=${want:-${vol}}
+        if [[ -n $(ls -A "${from}" 2>/dev/null) && -z $(ls -A "${to}" 2>/dev/null) ]]; then
+            lms_log "${svc}: copying $(du -sh "${from}" | cut -f1) from ${from} to ${to}..."
+            rsync -aHA "${from}/" "${to}/"
+            lms_log "${svc}: copied -- the old copy is left in ${from}; delete it once everything works"
+        fi
+        if [[ -n ${want} ]]; then
+            cat >"${file}" <<EOF
+# Written by lm-server: [${svc}] storage in lm-server.toml.
+[Unit]
+Description=lm-server: ${svc} data on ${want%/*}
+
+[Mount]
+What=${want}
+Where=${vol}
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target
+EOF
+        fi
+        systemctl daemon-reload
+        [[ -z ${want} ]] || systemctl enable --now "${unit}"
+    fi
+
+    local d
+    if [[ -f ${src}/volumes ]]; then
+        while IFS= read -r d; do
+            [[ -n ${d} ]] && mkdir -p "${vol}/${d}"
+        done <"${src}/volumes"
     fi
 }
 

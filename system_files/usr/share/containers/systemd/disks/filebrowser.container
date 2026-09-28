@@ -10,9 +10,9 @@ AutoUpdate=registry
 User=0:0
 Environment=FILEBROWSER_CONFIG=/home/filebrowser/config/config.yaml
 Volume=/var/lib/lm-server/env/disks/filebrowser:/home/filebrowser/config:ro,Z
-Volume=/var/lib/lm-server/data/disks/filebrowser:/home/filebrowser/data:Z
-Volume=/var/mnt/data/disk_0:/mnt/disk_0:z
-Volume=/var/mnt/data/docs:/mnt/docs:z
+Volume=/var/lib/lm-server/volumes/disks/filebrowser:/home/filebrowser/data:Z
+Volume=/var/lib/lm-server/volumes/disks/disk_0:/mnt/disk_0:z
+Volume=/var/lib/lm-server/volumes/disks/docs:/mnt/docs:z
 NoNewPrivileges=true
 
 [Service]

@@ -4,6 +4,8 @@
 [Unit]
 Description=sugar: Nightscout
 ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
+# Its data (bind-mounted from the `storage` disk, if one is set).
+RequiresMountsFor=/var/lib/lm-server/volumes/sugar
 
 [Pod]
 PodName=sugar

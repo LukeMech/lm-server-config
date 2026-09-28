@@ -6,6 +6,7 @@ LMS_STATE=/var/lib/lm-server
 LMS_SECRETS_ENV=${LMS_STATE}/secrets.env
 LMS_REPO_DIR=${LMS_STATE}/secrets-repo
 LMS_ENV=${LMS_STATE}/env
+LMS_VOLUMES=${LMS_STATE}/volumes
 LMS_LIBEXEC=/usr/libexec/lm-server
 LMS_RENDER=${LMS_LIBEXEC}/render.py
 LMS_DEFAULT_REPO=LukeMech/lm-server-config-secrets

@@ -23,12 +23,13 @@ dnf5 -y install \
     firewalld \
     NetworkManager \
     openssh-server \
-    `# lm-server scripts: git (secrets repo), jq/curl (provisioning), python3 (render.py)` \
+    `# lm-server scripts: git (secrets repo), jq/curl (provisioning), python3 (render.py), rsync (moving data between disks)` \
     coreutils \
     curl \
     git \
     jq \
     python3 \
+    rsync \
     shadow-utils \
     util-linux \
     `# data disks (Cockpit > Storage): mdraid + XFS` \

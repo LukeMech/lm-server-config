@@ -1,6 +1,7 @@
 [Unit]
 Description=website: website
 ConditionPathExists=/var/lib/lm-server/env/website/enabled
+RequiresMountsFor=/var/lib/lm-server/volumes/website
 
 [Container]
 ContainerName=website
@@ -12,7 +13,7 @@ PublishPort=127.0.0.1:3000:3000
 EnvironmentFile=/var/lib/lm-server/env/website/app.env
 # Own user namespace: root in here is an unprivileged uid on the host.
 UserNS=auto
-Volume=/var/lib/lm-server/data/website:/data:Z,U
+Volume=/var/lib/lm-server/volumes/website:/data:Z,U
 ReadOnly=true
 Tmpfs=/tmp
 DropCapability=ALL

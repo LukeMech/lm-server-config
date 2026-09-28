@@ -18,14 +18,17 @@ LMS_GITHUB_USER (default token for the web apps' private repos).
 
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import tomllib
 
-DATA = "/var/lib/lm-server/data"
-MNT = "/var/mnt/data"  # the data disk (Cockpit > Storage)
+# Every service keeps all of its data in VOLUMES/<service>/. By default that's
+# on the system disk; `storage = "/var/mnt/<disk>"` in its section bind-mounts
+# <disk>/<service> there instead (lm-server moves the data on a change).
+VOLUMES = "/var/lib/lm-server/volumes"
 CACHE = "/var/lib/lm-server/cache"
 GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
 
@@ -164,9 +167,22 @@ class Out:
         self.write(rel, json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
 
 
-def data_dirs(*paths, root=DATA):
-    for p in paths:
-        os.makedirs(os.path.join(root, p), exist_ok=True)
+def volumes(out, *subdirs):
+    """Subdirectories of VOLUMES/<service> the containers mount."""
+    out.write("volumes", "".join(f"{d}\n" for d in subdirs))
+
+
+def storage(sec, out, where):
+    """Optional `storage = "/var/mnt/<disk>"`: the disk holding this service's data."""
+    path = sec.get("storage", "")
+    if not path:
+        return
+    if path.startswith("/mnt/"):
+        path = "/var" + path  # /mnt is a symlink to /var/mnt on bootc
+    path = posixpath.normpath(path)
+    if not re.fullmatch(r"/var/(mnt|srv)/[^\s]+", path):
+        raise ConfigError(f"{where}.storage must be a mounted disk under /var/mnt (got '{path}')")
+    out.write("storage", f"{path}/{where}\n")
 
 
 # ---------------------------------------------------------------- services
@@ -218,8 +234,7 @@ frontend:
             "folders": folders,
         },
     )
-    data_dirs("disks/filebrowser", "disks/syncthing")
-    data_dirs("disk_0", "docs", *(p[len("/mnt/"):] for p in folders.values()), root=MNT)
+    volumes(out, "filebrowser", "syncthing", "disk_0", "docs", *(p[len("/mnt/"):] for p in folders.values()))
 
 
 def r_webapp(name):
@@ -230,7 +245,7 @@ def r_webapp(name):
         env["APP_GITHUB_USER"] = sec.get("github_user", ctx["user"])
         env.update(extra_env(sec, name))
         out.write("app.env", env_file(env))
-        data_dirs(name)
+        volumes(out, ".")
 
     return render
 
@@ -241,7 +256,7 @@ def r_convert(sec, out, ctx):
     env["JWT_SECRET"] = need(sec, "jwt_secret", "convert")
     out.write("convertx.env", env_file(env))
     out.json("users.json", users(sec, "convert", ["email", "password"]))
-    data_dirs("convert")
+    volumes(out, ".")
 
 
 def r_immich(sec, out, ctx):
@@ -267,8 +282,7 @@ def r_immich(sec, out, ctx):
         need(admin, field, f"{w}.admin")
     out.json("admin.json", {"email": admin["email"], "password": admin["password"], "name": admin.get("name", "Admin")})
     out.json("users.json", users(sec, w, ["email", "password"]))
-    data_dirs("immich/postgres", "immich/model-cache")
-    data_dirs("immich", root=MNT)
+    volumes(out, "library", "postgres", "model-cache")
 
 
 def r_remote(sec, out, ctx):
@@ -300,7 +314,7 @@ def r_remote(sec, out, ctx):
             f.write(sql)
     with open(cache, encoding="utf-8") as f:
         out.write("initdb/001-guacamole-schema.sql", f.read())
-    data_dirs("remote/postgres")
+    volumes(out, "postgres")
 
 
 def r_sugar(sec, out, ctx):
@@ -316,7 +330,7 @@ def r_sugar(sec, out, ctx):
     env.update(extra_env(sec, "sugar"))
     env["API_SECRET"] = api_secret
     out.write("nightscout.env", env_file(env))
-    data_dirs("sugar/mongo")
+    volumes(out, "mongo")
 
 
 RENDER = {
@@ -373,6 +387,7 @@ def cmd_render(toml_path, out_root):
             sec = cfg[name]
             no_placeholders(sec, name)
             render(sec, Out(target), ctx)
+            storage(sec, Out(target), name)
             os.makedirs(target, mode=0o700, exist_ok=True)
         except (ConfigError, subprocess.CalledProcessError, OSError) as e:
             shutil.rmtree(target, ignore_errors=True)
