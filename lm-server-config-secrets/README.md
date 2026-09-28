@@ -17,5 +17,5 @@ services whose settings changed. To apply at once, run `lm-server config pull`
 or click **Sync configs** in Cockpit.
 
 Never put real values in this public folder. To try the template, point setup at
-`LukeMech/lm-server-config`, folder `lm-server-config-secrets`. Because the values are still
+`LukeMech/lm-server-config`, config file `lm-server-config-secrets/lm-server.toml`. Because the values are still
 `CHANGE_ME`, no service starts.

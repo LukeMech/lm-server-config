@@ -162,7 +162,7 @@ in a service's section cap all of its containers together, like the
 cores/RAM of a Proxmox guest. They're applied live via the service's systemd
 slice `lm-server-<service>.slice`. Leave them out for no limit;
 `lm-server services` shows usage against the limit. Swap is **zram** (half of RAM,
-max 8 GiB, zstd), configured in `/usr/lib/systemd/zram-generator.conf`.
+zstd), configured in `/usr/lib/systemd/zram-generator.conf`.
 
 Disks are set up once, by hand, in **Cockpit > Storage** (formatting wipes
 them). Cockpit writes `/etc/fstab`, and bootc keeps `/etc` across upgrades.
