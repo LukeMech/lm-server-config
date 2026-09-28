@@ -1,3 +1,10 @@
+# lm-server: description lukemech.org
+# lm-server: route lukemech.org http://localhost:3000
+# lm-server: env APP_REPO=LukeMech/website
+# lm-server: env APP_MODULE=main:app
+# lm-server: env APP_PORT=3000
+# lm-server: env APP_GITHUB_TOKEN={{github_token}}
+# lm-server: env APP_GITHUB_USER={{github_user}}
 [Unit]
 Description=website: website
 ConditionPathExists=/var/lib/lm-server/env/website/enabled
@@ -10,7 +17,7 @@ Image=ghcr.io/lukemech/lm-server-webapp:latest
 AutoUpdate=registry
 Network=website.network
 PublishPort=127.0.0.1:3000:3000
-EnvironmentFile=/var/lib/lm-server/env/website/app.env
+EnvironmentFile=/var/lib/lm-server/env/website/website.env
 # Own user namespace: root in here is an unprivileged uid on the host.
 UserNS=auto
 Volume=/var/lib/lm-server/volumes/website:/data:Z,U

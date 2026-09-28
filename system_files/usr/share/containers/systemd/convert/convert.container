@@ -1,3 +1,8 @@
+# lm-server: description ConvertX
+# lm-server: route convert.lukemech.org http://localhost:3001
+# lm-server: env ACCOUNT_REGISTRATION=false
+# lm-server: env HTTP_ALLOWED=false
+# lm-server: require JWT_SECRET
 [Unit]
 Description=convert: convert
 ConditionPathExists=/var/lib/lm-server/env/convert/enabled
@@ -9,7 +14,7 @@ Image=ghcr.io/c4illin/convertx:latest
 AutoUpdate=registry
 Network=convert.network
 PublishPort=127.0.0.1:3001:3000
-EnvironmentFile=/var/lib/lm-server/env/convert/convertx.env
+EnvironmentFile=/var/lib/lm-server/env/convert/convert.env
 Volume=/var/lib/lm-server/volumes/convert:/app/data:Z
 NoNewPrivileges=true
 

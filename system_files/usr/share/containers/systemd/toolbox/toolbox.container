@@ -1,3 +1,10 @@
+# lm-server: description toolbox.lukemech.org
+# lm-server: route toolbox.lukemech.org http://localhost:6600
+# lm-server: env APP_REPO=LukeMech-PlayStore/toolbox-website
+# lm-server: env APP_MODULE=server:app
+# lm-server: env APP_PORT=6600
+# lm-server: env APP_GITHUB_TOKEN={{github_token}}
+# lm-server: env APP_GITHUB_USER={{github_user}}
 [Unit]
 Description=toolbox: toolbox
 ConditionPathExists=/var/lib/lm-server/env/toolbox/enabled
@@ -10,7 +17,7 @@ Image=ghcr.io/lukemech/lm-server-webapp:latest
 AutoUpdate=registry
 Network=toolbox.network
 PublishPort=127.0.0.1:6600:6600
-EnvironmentFile=/var/lib/lm-server/env/toolbox/app.env
+EnvironmentFile=/var/lib/lm-server/env/toolbox/toolbox.env
 # Own user namespace: root in here is an unprivileged uid on the host.
 UserNS=auto
 Volume=/var/lib/lm-server/volumes/toolbox:/data:Z,U

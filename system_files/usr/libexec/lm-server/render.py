@@ -14,7 +14,22 @@ Usage:
     render.py check <toml>          same checks and exit codes, writes nothing
 
 The GitHub credentials from `lm-server setup` come in as LMS_GITHUB_TOKEN /
-LMS_GITHUB_USER (default token for the web apps' private repos).
+LMS_GITHUB_USER ({{github_token}} / {{github_user}} in `env` defaults).
+
+A service is a directory of quadlets in /usr/share/containers/systemd/<name>/.
+Everything lm-server needs to know about it comes from those files:
+
+    unit        <name>-pod if there's a <name>.pod, else its .container(s)
+    volumes     subdirectories, from `Volume=/var/lib/lm-server/volumes/<name>/<sub>:...`
+    # lm-server: description <text>
+    # lm-server: route <hostname> <url>        (Cloudflare route; repeatable)
+    # lm-server: env <KEY>=<default value>     (repeatable)
+    # lm-server: require <KEY>                 (must be set in lm-server.toml)
+
+With no custom renderer below, [<name>] in lm-server.toml renders to
+env/<name>/<name>.env (point the quadlet's EnvironmentFile= there):
+`env` defaults < top-level keys (tunnel_token -> TUNNEL_TOKEN) < `env = {...}`;
+`users = [...]` goes to env/<name>/users.json for provision/<name>.sh.
 """
 
 import json
@@ -26,6 +41,7 @@ import subprocess
 import sys
 import tomllib
 
+QUADLETS = os.environ.get("LMS_QUADLET_DIR", "/usr/share/containers/systemd")
 # Every service keeps all of its data in VOLUMES/<service>/. By default that's
 # on the system disk; `storage = "/var/mnt/<disk>"` in its section bind-mounts
 # <disk>/<service> there instead (lm-server moves the data on a change).
@@ -34,71 +50,73 @@ CACHE = "/var/lib/lm-server/cache"
 GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
 CHECK_ONLY = False  # `check`: validate without side effects (no podman)
 
-# Every service this image can run. "units" are what `lm-server start/stop`
-# acts on (a pod unit starts/stops all of its containers).
-SERVICES = {
+# Keys of a service section lm-server handles itself (never passed as env).
+RESERVED = {"storage", "cpus", "memory", "env", "users"}
+
+# Services that are part of the system rather than quadlets.
+BUILTIN = {
     "cloudflared": {
         "desc": "Cloudflare Tunnel",
         "units": ["lm-server-cloudflared"],
         "routes": {"proxmox.lukemech.org": "https://localhost:9090"},
-    },
-    "disks": {
-        "desc": "FileBrowser Quantum + Syncthing",
-        "units": ["disks-pod"],
-        "routes": {
-            "disk.lukemech.org": "http://localhost:8001",
-            "syncdisks.lukemech.org": "http://localhost:8384",
-        },
-    },
-    "toolbox": {
-        "desc": "toolbox.lukemech.org",
-        "units": ["toolbox"],
-        "routes": {"toolbox.lukemech.org": "http://localhost:6600"},
-        "app": {"APP_REPO": "LukeMech-PlayStore/toolbox-website", "APP_MODULE": "server:app", "APP_PORT": "6600"},
-    },
-    "website": {
-        "desc": "lukemech.org",
-        "units": ["website"],
-        "routes": {"lukemech.org": "http://localhost:3000"},
-        "app": {"APP_REPO": "LukeMech/website", "APP_MODULE": "main:app", "APP_PORT": "3000"},
-    },
-    "exp": {
-        "desc": "exp.lukemech.org (CV)",
-        "units": ["exp"],
-        "routes": {"exp.lukemech.org": "http://localhost:7999"},
-        "app": {
-            "APP_REPO": "LukeMech/CV",
-            "APP_MODULE": "server:app",
-            "APP_PORT": "7999",
-            "APP_PIP_PACKAGES": "rendercv[full]",
-            "APP_BUILD_CMD": "rendercv render Łukasz_Błaszczyk_CV_EN.yaml",
-        },
-    },
-    "convert": {
-        "desc": "ConvertX",
-        "units": ["convert"],
-        "routes": {"convert.lukemech.org": "http://localhost:3001"},
-    },
-    "immich": {
-        "desc": "Immich",
-        "units": ["immich-pod"],
-        "routes": {"immich.lukemech.org": "http://localhost:2283"},
-    },
-    "remote": {
-        "desc": "Apache Guacamole",
-        "units": ["remote-pod"],
-        "routes": {"remote.lukemech.org": "http://localhost:8443"},
-    },
-    "sugar": {
-        "desc": "Nightscout",
-        "units": ["sugar-pod"],
-        "routes": {"sugar.lukemech.org": "http://localhost:1337"},
+        "env": {},
+        "require": ["TUNNEL_TOKEN"],
+        "volumes": [],
     },
 }
+
+DIRECTIVE = re.compile(r"^#\s*lm-server:\s*([a-z-]+)\s*(.*?)\s*$")
 
 
 class ConfigError(Exception):
     pass
+
+
+def catalog():
+    """All services: BUILTIN + one per quadlet directory."""
+    services = {k: dict(v) for k, v in BUILTIN.items()}
+    if not os.path.isdir(QUADLETS):
+        return services
+    for name in sorted(os.listdir(QUADLETS)):
+        d = os.path.join(QUADLETS, name)
+        if not os.path.isdir(d) or name.endswith(".d"):
+            continue
+        files = sorted(os.listdir(d))
+        pods = [f[: -len(".pod")] for f in files if f.endswith(".pod")]
+        containers = [f[: -len(".container")] for f in files if f.endswith(".container")]
+        units = [f"{pods[0]}-pod"] if pods else containers
+        if not units:
+            continue
+        spec = {"desc": name, "units": units, "routes": {}, "env": {}, "require": [], "volumes": []}
+        vol = re.compile(rf"^Volume={re.escape(VOLUMES)}/{re.escape(name)}(/[^:]*)?:")
+        for f in files:
+            with open(os.path.join(d, f), encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    m = vol.match(line)
+                    if m:
+                        sub = (m.group(1) or "").strip("/") or "."
+                        if sub not in spec["volumes"]:
+                            spec["volumes"].append(sub)
+                        continue
+                    m = DIRECTIVE.match(line)
+                    if not m:
+                        continue
+                    key, arg = m.groups()
+                    if key == "description":
+                        spec["desc"] = arg
+                    elif key == "route" and len(arg.split()) == 2:
+                        host, url = arg.split()
+                        spec["routes"][host] = url
+                    elif key == "env" and "=" in arg:
+                        k, v = arg.split("=", 1)
+                        spec["env"][k.strip()] = v.strip()
+                    elif key == "require" and arg:
+                        spec["require"].append(arg)
+                    else:
+                        raise SystemExit(f"{d}/{f}: bad directive: {line}")
+        services[name] = spec
+    return services
 
 
 def need(sec, key, where):
@@ -145,12 +163,15 @@ def extra_env(sec, where):
 
 
 def users(sec, where, fields):
-    """[[<service>.users]] tables -> list of dicts with the required fields."""
-    result = []
-    for i, user in enumerate(sec.get("users", [])):
+    """users = [{...}, ...] -> list of dicts with the required fields."""
+    result = sec.get("users", [])
+    if not isinstance(result, list):
+        raise ConfigError(f"{where}.users must be a list of tables")
+    for i, user in enumerate(result):
+        if not isinstance(user, dict):
+            raise ConfigError(f"{where}.users[{i}] must be a table")
         for field in fields:
             need(user, field, f"{where}.users[{i}]")
-        result.append(user)
     return result
 
 
@@ -158,10 +179,10 @@ class Out:
     def __init__(self, root):
         self.root = root
 
-    def write(self, rel, text):
+    def write(self, rel, text, mode="w"):
         path = os.path.join(self.root, rel)
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
+        with open(path, mode, encoding="utf-8", newline="\n") as f:
             f.write(text)
         os.chmod(path, 0o600)
 
@@ -170,8 +191,8 @@ class Out:
 
 
 def volumes(out, *subdirs):
-    """Subdirectories of VOLUMES/<service> the containers mount."""
-    out.write("volumes", "".join(f"{d}\n" for d in subdirs))
+    """Extra subdirectories of VOLUMES/<service> to create (appends)."""
+    out.write("volumes", "".join(f"{d}\n" for d in subdirs), mode="a")
 
 
 def limits(sec, out, where):
@@ -206,20 +227,38 @@ def storage(sec, out, where):
     out.write("storage", f"{path}/{where}\n")
 
 
-# ---------------------------------------------------------------- services
+# ---------------------------------------------------------------- renderers
 
 
-def r_cloudflared(sec, out, ctx):
-    out.write("cloudflared.env", env_file({"TUNNEL_TOKEN": need(sec, "tunnel_token", "cloudflared")}))
+def r_generic(name, spec, sec, out, ctx):
+    """env defaults < top-level keys < env table -> <name>.env; users -> users.json."""
+    subst = {"github_token": sec.get("github_token", ctx["token"]), "github_user": sec.get("github_user", ctx["user"])}
+    env = {k: re.sub(r"\{\{(\w+)\}\}", lambda m: scalar(subst.get(m.group(1), "")), v) for k, v in spec["env"].items()}
+    for key, value in sec.items():
+        if key in RESERVED:
+            continue
+        if isinstance(value, (dict, list)):
+            raise ConfigError(f"{name}.{key}: only plain values here (use env = {{ ... }} for more)")
+        env[key.upper()] = scalar(value)
+    env.update(extra_env(sec, name))
+    for key in spec["require"]:
+        if not scalar(env.get(key, "")):
+            raise ConfigError(f"{name}.{key.lower()} is not set")
+    out.write(f"{name}.env", env_file(env))
+    if "users" in sec:
+        out.json("users.json", users(sec, name, []))
 
 
-def r_disks(sec, out, ctx):
-    w = "disks"
+# Services that need more than an env file (generated configs, several env
+# files, DB schema). Everything else uses r_generic.
+
+
+def r_disks(name, spec, sec, out, ctx):
     folders = sec.get("syncthing_folders", {"keepass": "/mnt/disk_0/Keepass", "sync": "/mnt/disk_0/Sync"})
     for fid, path in folders.items():
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", fid) or not re.fullmatch(r"/mnt/(disk_0|docs)(/[^\s]*)?", path):
-            raise ConfigError(f"{w}.syncthing_folders: '{fid}' -> '{path}' (path must be under /mnt/disk_0 or /mnt/docs, no spaces)")
-    admin = need(sec, "filebrowser_admin", w)
+            raise ConfigError(f"{name}.syncthing_folders: '{fid}' -> '{path}' (path must be under /mnt/disk_0 or /mnt/docs, no spaces)")
+    admin = need(sec, "filebrowser_admin", name)
     q = json.dumps  # a JSON string is a valid YAML scalar
     out.write(
         "filebrowser/config.yaml",
@@ -238,7 +277,7 @@ def r_disks(sec, out, ctx):
         defaultEnabled: true
 auth:
   adminUsername: {q(admin)}
-  adminPassword: {q(need(sec, "filebrowser_password", w))}
+  adminPassword: {q(need(sec, "filebrowser_password", name))}
   methods:
     password:
       enabled: true
@@ -246,46 +285,19 @@ frontend:
   name: {q(sec.get("filebrowser_name", "disk.lukemech.org"))}
 """,
     )
-    out.json("filebrowser-users.json", [u for u in users(sec, w, ["login", "password"]) if u["login"] != admin])
+    out.json("filebrowser-users.json", [u for u in users(sec, name, ["login", "password"]) if u["login"] != admin])
     out.json(
         "syncthing.json",
-        {
-            "user": need(sec, "syncthing_user", w),
-            "password": need(sec, "syncthing_password", w),
-            "folders": folders,
-        },
+        {"user": need(sec, "syncthing_user", name), "password": need(sec, "syncthing_password", name), "folders": folders},
     )
-    volumes(out, "filebrowser", "syncthing", "disk_0", "docs", *(p[len("/mnt/"):] for p in folders.values()))
+    volumes(out, *(p[len("/mnt/"):] for p in folders.values()))
 
 
-def r_webapp(name):
-    def render(sec, out, ctx):
-        env = dict(SERVICES[name]["app"])
-        env["APP_BRANCH"] = sec.get("branch", "main")
-        env["APP_GITHUB_TOKEN"] = sec.get("github_token", ctx["token"])
-        env["APP_GITHUB_USER"] = sec.get("github_user", ctx["user"])
-        env.update(extra_env(sec, name))
-        out.write("app.env", env_file(env))
-        volumes(out, ".")
-
-    return render
-
-
-def r_convert(sec, out, ctx):
-    env = {"ACCOUNT_REGISTRATION": "false", "HTTP_ALLOWED": "false"}
-    env.update(extra_env(sec, "convert"))
-    env["JWT_SECRET"] = need(sec, "jwt_secret", "convert")
-    out.write("convertx.env", env_file(env))
-    out.json("users.json", users(sec, "convert", ["email", "password"]))
-    volumes(out, ".")
-
-
-def r_immich(sec, out, ctx):
-    w = "immich"
-    db_password = need(sec, "db_password", w)
+def r_immich(name, spec, sec, out, ctx):
+    db_password = need(sec, "db_password", name)
     if not re.fullmatch(r"[A-Za-z0-9]+", db_password):
-        raise ConfigError(f"{w}.db_password: letters and digits only (Immich requirement)")
-    env = dict(extra_env(sec, w))
+        raise ConfigError(f"{name}.db_password: letters and digits only (Immich requirement)")
+    env = dict(extra_env(sec, name))
     env.update(
         {
             "DB_HOSTNAME": "127.0.0.1",
@@ -298,19 +310,17 @@ def r_immich(sec, out, ctx):
     )
     out.write("server.env", env_file(env))
     out.write("database.env", env_file({"POSTGRES_USER": "postgres", "POSTGRES_DB": "immich", "POSTGRES_PASSWORD": db_password}))
-    admin = need(sec, "admin", w)
+    admin = need(sec, "admin", name)
     for field in ("email", "password"):
-        need(admin, field, f"{w}.admin")
+        need(admin, field, f"{name}.admin")
     out.json("admin.json", {"email": admin["email"], "password": admin["password"], "name": admin.get("name", "Admin")})
-    out.json("users.json", users(sec, w, ["email", "password"]))
-    volumes(out, "library", "postgres", "model-cache")
+    out.json("users.json", users(sec, name, ["email", "password"]))
 
 
-def r_remote(sec, out, ctx):
-    w = "remote"
-    db_password = need(sec, "db_password", w)
+def r_remote(name, spec, sec, out, ctx):
+    db_password = need(sec, "db_password", name)
     out.write("database.env", env_file({"POSTGRES_DB": "guacamole_db", "POSTGRES_USER": "guacamole", "POSTGRES_PASSWORD": db_password}))
-    env = dict(extra_env(sec, w))
+    env = dict(extra_env(sec, name))
     env.update(
         {
             "GUACD_HOSTNAME": "127.0.0.1",
@@ -322,7 +332,7 @@ def r_remote(sec, out, ctx):
         }
     )
     out.write("guacamole.env", env_file(env))
-    out.json("users.json", users(sec, w, ["login", "password"]))
+    out.json("users.json", users(sec, name, ["login", "password"]))
     if CHECK_ONLY:
         return
     # DB schema, generated once per Guacamole version by the image's own script.
@@ -337,36 +347,9 @@ def r_remote(sec, out, ctx):
             f.write(sql)
     with open(cache, encoding="utf-8") as f:
         out.write("initdb/001-guacamole-schema.sql", f.read())
-    volumes(out, "postgres")
 
 
-def r_sugar(sec, out, ctx):
-    api_secret = need(sec, "api_secret", "sugar")
-    if len(api_secret) < 12:
-        raise ConfigError("sugar.api_secret must be at least 12 characters")
-    env = {
-        "MONGO_CONNECTION": "mongodb://127.0.0.1:27017/nightscout",
-        "PORT": "1337",
-        "NODE_ENV": "production",
-        "INSECURE_USE_HTTP": "true",
-    }
-    env.update(extra_env(sec, "sugar"))
-    env["API_SECRET"] = api_secret
-    out.write("nightscout.env", env_file(env))
-    volumes(out, "mongo")
-
-
-RENDER = {
-    "cloudflared": r_cloudflared,
-    "disks": r_disks,
-    "toolbox": r_webapp("toolbox"),
-    "website": r_webapp("website"),
-    "exp": r_webapp("exp"),
-    "convert": r_convert,
-    "immich": r_immich,
-    "remote": r_remote,
-    "sugar": r_sugar,
-}
+CUSTOM = {"disks": r_disks, "immich": r_immich, "remote": r_remote}
 
 # ---------------------------------------------------------------- host
 
@@ -396,23 +379,28 @@ def cmd_render(toml_path, out_root):
     except (OSError, tomllib.TOMLDecodeError) as e:
         print(f"cannot read {toml_path}: {e}", file=sys.stderr)
         return 2
+    services = catalog()
     for key in cfg:
-        if key not in SERVICES and key not in ("host", "updates"):
-            print(f"warning: unknown section [{key}] ignored", file=sys.stderr)
+        if key not in services and key not in ("host", "updates"):
+            print(f"warning: unknown section [{key}] ignored (no such service in this image)", file=sys.stderr)
 
     ctx = {"token": os.environ.get("LMS_GITHUB_TOKEN", ""), "user": os.environ.get("LMS_GITHUB_USER", "")}
     r_host(cfg, Out(os.path.join(out_root, "host")))
     status = 0
-    for name, render in RENDER.items():
+    for name, spec in services.items():
         if name not in cfg:
             continue
         target = os.path.join(out_root, name)
+        out = Out(target)
         try:
             sec = cfg[name]
+            if not isinstance(sec, dict):
+                raise ConfigError(f"[{name}] must be a table")
             no_placeholders(sec, name)
-            render(sec, Out(target), ctx)
-            storage(sec, Out(target), name)
-            limits(sec, Out(target), name)
+            CUSTOM.get(name, r_generic)(name, spec, sec, out, ctx)
+            volumes(out, *spec["volumes"])
+            storage(sec, out, name)
+            limits(sec, out, name)
             os.makedirs(target, mode=0o700, exist_ok=True)
         except (ConfigError, subprocess.CalledProcessError, OSError) as e:
             shutil.rmtree(target, ignore_errors=True)
@@ -423,7 +411,7 @@ def cmd_render(toml_path, out_root):
 
 
 def cmd_services():
-    for name, spec in SERVICES.items():
+    for name, spec in catalog().items():
         routes = " ".join(f"{h}={u}" for h, u in spec["routes"].items())
         print(f"{name}\t{' '.join(spec['units'])}\t{routes}\t{spec['desc']}")
     return 0

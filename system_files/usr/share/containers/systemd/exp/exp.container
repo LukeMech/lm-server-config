@@ -1,3 +1,12 @@
+# lm-server: description exp.lukemech.org (CV)
+# lm-server: route exp.lukemech.org http://localhost:7999
+# lm-server: env APP_REPO=LukeMech/CV
+# lm-server: env APP_MODULE=server:app
+# lm-server: env APP_PORT=7999
+# lm-server: env APP_PIP_PACKAGES=rendercv[full]
+# lm-server: env APP_BUILD_CMD=rendercv render Łukasz_Błaszczyk_CV_EN.yaml
+# lm-server: env APP_GITHUB_TOKEN={{github_token}}
+# lm-server: env APP_GITHUB_USER={{github_user}}
 [Unit]
 Description=exp: exp
 ConditionPathExists=/var/lib/lm-server/env/exp/enabled
@@ -10,7 +19,7 @@ Image=ghcr.io/lukemech/lm-server-webapp:latest
 AutoUpdate=registry
 Network=exp.network
 PublishPort=127.0.0.1:7999:7999
-EnvironmentFile=/var/lib/lm-server/env/exp/app.env
+EnvironmentFile=/var/lib/lm-server/env/exp/exp.env
 # Own user namespace: root in here is an unprivileged uid on the host.
 UserNS=auto
 Volume=/var/lib/lm-server/volumes/exp:/data:Z,U

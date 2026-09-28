@@ -1,3 +1,10 @@
+# lm-server: description Nightscout
+# lm-server: route sugar.lukemech.org http://localhost:1337
+# lm-server: env MONGO_CONNECTION=mongodb://127.0.0.1:27017/nightscout
+# lm-server: env PORT=1337
+# lm-server: env NODE_ENV=production
+# lm-server: env INSECURE_USE_HTTP=true
+# lm-server: require API_SECRET
 # One unit for the whole service: `systemctl restart sugar-pod` (or
 # `lm-server restart sugar`) stops/starts every container below together.
 # Containers in a pod share localhost, so they talk to each other on 127.0.0.1.

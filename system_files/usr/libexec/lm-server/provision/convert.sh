@@ -16,13 +16,13 @@ state="${LMS_STATE}/convert-users.sha256"
 sum=$(sha256sum "${USERS}" | cut -d' ' -f1)
 [[ $(cat "${state}" 2>/dev/null) == "${sum}" ]] && exit 0
 
-cp "${ENVDIR}/convertx.env" "${ENVDIR}/convertx.env.orig"
+cp "${ENVDIR}/convert.env" "${ENVDIR}/convert.env.orig"
 restore() {
-    mv -f "${ENVDIR}/convertx.env.orig" "${ENVDIR}/convertx.env"
+    mv -f "${ENVDIR}/convert.env.orig" "${ENVDIR}/convert.env"
     systemctl restart convert.service
 }
 trap restore EXIT
-sed -i 's/^ACCOUNT_REGISTRATION=.*/ACCOUNT_REGISTRATION=true/' "${ENVDIR}/convertx.env"
+sed -i 's/^ACCOUNT_REGISTRATION=.*/ACCOUNT_REGISTRATION=true/' "${ENVDIR}/convert.env"
 systemctl restart convert.service
 lms_wait_http "${URL}/login" 600 || lms_die "convert: ConvertX did not come up"
 

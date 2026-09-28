@@ -39,7 +39,9 @@ done
 python3 -c 'import tomllib'
 test -x /usr/lib/systemd/system-generators/zram-generator
 
-# Validate every quadlet now, not at first boot on the server.
+# Validate every quadlet (and its # lm-server: directives) now, not at first
+# boot on the server.
+/usr/libexec/lm-server/render.py services
 /usr/libexec/podman/quadlet -dryrun >/dev/null
 
 dnf5 -y clean all

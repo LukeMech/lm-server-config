@@ -9,7 +9,7 @@ ContainerName=sugar-nightscout
 Pod=sugar.pod
 Image=docker.io/nightscout/cgm-remote-monitor:latest
 AutoUpdate=registry
-EnvironmentFile=/var/lib/lm-server/env/sugar/nightscout.env
+EnvironmentFile=/var/lib/lm-server/env/sugar/sugar.env
 NoNewPrivileges=true
 
 [Service]

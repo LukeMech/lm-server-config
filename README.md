@@ -196,9 +196,9 @@ lm-server prune-adhoc
 ```
 Containerfile, build_files/            system image (numbered hooks, like immutable-sbc)
 system_files/                          copied onto / of the system image
-  usr/share/containers/systemd/<svc>/  quadlets, one folder per service
-  usr/libexec/lm-server/render.py      lm-server.toml -> per-service env/config files,
-                                       + the service catalog (units, routes)
+  usr/share/containers/systemd/<svc>/  quadlets, one folder per service = the service catalog
+  usr/libexec/lm-server/render.py      lm-server.toml -> per-service env/config files
+                                       (generic; custom code only for disks/immich/remote)
   usr/libexec/lm-server/provision/     creates users (APIs / SQL / CLI) on config change
   usr/share/cockpit/lm-server/         the Cockpit page
   usr/bin/lm-server                    the CLI
@@ -218,10 +218,76 @@ The repo secret **`SIGNING_SECRET`** is required: the cosign key matching
 
 Local: `just build`, `just build-image webapp`, `just build-iso`, `just build-qcow2 && just run-vm`.
 
-**Adding a service**:
-1. Create a quadlet folder in `system_files/usr/share/containers/systemd/<svc>/`.
-   Add `ConditionPathExists=/var/lib/lm-server/env/<svc>/enabled`, and give
-   pod members `[Install] WantedBy=<svc>-pod.service`.
-2. Add an entry to `SERVICES` and a `r_<svc>` function in `render.py`.
-3. If the service has users, add `provision/<svc>.sh`.
-4. Add a `[<svc>]` section to the template.
+### Adding a service
+
+A plain service is **one folder of quadlets + one section in lm-server.toml**.
+No code changes and no config beyond those. lm-server picks the service up
+from the folder. Example, Uptime Kuma at `status.lukemech.org`:
+
+`system_files/usr/share/containers/systemd/kuma/kuma.container`
+```ini
+# lm-server: description Uptime Kuma
+# lm-server: route status.lukemech.org http://localhost:3002
+# lm-server: env UPTIME_KUMA_PORT=3001
+[Unit]
+Description=kuma: Uptime Kuma
+ConditionPathExists=/var/lib/lm-server/env/kuma/enabled
+RequiresMountsFor=/var/lib/lm-server/volumes/kuma
+
+[Container]
+ContainerName=kuma
+Image=docker.io/louislam/uptime-kuma:2
+AutoUpdate=registry
+Network=kuma.network
+PublishPort=127.0.0.1:3002:3001
+EnvironmentFile=/var/lib/lm-server/env/kuma/kuma.env
+Volume=/var/lib/lm-server/volumes/kuma:/app/data:Z
+NoNewPrivileges=true
+
+[Service]
+Slice=lm-server-kuma.slice
+Restart=always
+TimeoutStartSec=900
+```
+`system_files/usr/share/containers/systemd/kuma/kuma.network`
+```ini
+[Network]
+NetworkName=lm-server-kuma
+```
+`lm-server.toml`
+```toml
+[kuma]
+storage = "/var/mnt/nvme"   # optional, like cpus / memory
+# any key becomes an env var: admin_email = "..." -> ADMIN_EMAIL
+```
+
+What lm-server reads from the folder:
+- **unit**: `<name>-pod` if there's a `<name>.pod`, otherwise the container.
+- **data folders**: every `Volume=/var/lib/lm-server/volumes/<name>/...`.
+- **directives** in comments:
+  - `# lm-server: description <text>`
+  - `# lm-server: route <host> <url>`
+  - `# lm-server: env KEY=default` (`{{github_token}}` / `{{github_user}}` are
+    filled in with the setup credentials)
+  - `# lm-server: require KEY` (must be set in lm-server.toml)
+
+The section renders to `env/<name>/<name>.env`. Values, lowest priority first:
+directive defaults, then top-level keys, then `env = { ... }`. `users = [...]`
+goes to `env/<name>/users.json`.
+
+Rules for the quadlets:
+- Every unit needs `ConditionPathExists=…/env/<name>/enabled` and
+  `Slice=lm-server-<name>.slice`.
+- Web UIs publish on `127.0.0.1`.
+- For several containers, add `<name>.pod` (with the `PublishPort=`s and
+  `Network=`) and give each container `Pod=<name>.pod` plus
+  `[Install] WantedBy=<name>-pod.service`. `immich/` and `sugar/` are
+  working examples.
+- If users have to be created through an API, add
+  `system_files/usr/libexec/lm-server/provision/<name>.sh`. It runs after every
+  config change of that service.
+- A custom renderer in `render.py` (`CUSTOM`) is only needed for generated
+  config files or several env files. disks, immich and remote have one.
+
+Then push. CI builds the image, and `lm-server upgrade` + reboot brings the
+service to the server.
