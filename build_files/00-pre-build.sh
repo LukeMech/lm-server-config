@@ -36,6 +36,17 @@ dnf5 -y install \
     zram-generator \
     `# data disks (Cockpit > Storage): mdraid + XFS` \
     mdadm \
-    xfsprogs
+    xfsprogs \
+    `# when running as a VM (Proxmox shows the IP, clean shutdown); idle on bare metal` \
+    qemu-guest-agent
+
+# Plain kernel VT + getty instead of kmscon (Fedora 44's default console):
+# kmscon draws its own terminals, so the first-boot prompt on /dev/tty1
+# (lm-server-firstboot.service) would never be visible -- the screen just
+# stops at the last initrd message.
+if rpm -q kmscon >/dev/null 2>&1; then
+    dnf5 -y remove kmscon
+fi
+systemctl enable getty@tty1.service
 
 systemctl enable sshd.service NetworkManager.service podman.socket
