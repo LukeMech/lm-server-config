@@ -132,6 +132,27 @@ pre.log {
     min-height: 2em;
 }
 
+.card.admin {
+    border-color: #f0ab00;
+}
+
+#admin-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0;
+}
+
+.admin-text {
+    flex: 1 1 280px;
+}
+
+.admin-error {
+    color: #c9190b;
+    margin: 8px 0 0;
+}
+
 pre.log.failed {
     outline: 2px solid #c9190b;
 }

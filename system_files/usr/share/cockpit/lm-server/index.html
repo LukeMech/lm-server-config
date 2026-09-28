@@ -10,6 +10,15 @@
 </head>
 <body>
     <main>
+        <section class="card admin" id="admin" hidden>
+            <form id="admin-form">
+                <span class="admin-text" id="admin-text">🔒 Limited access: the actions on this page run as root, so they need administrative access.</span>
+                <input id="admin-password" type="password" autocomplete="current-password" hidden>
+                <button class="primary" type="submit" id="admin-button">Turn on administrative access</button>
+            </form>
+            <p class="admin-error" id="admin-error" hidden></p>
+        </section>
+
         <section class="card" data-log>
             <header>
                 <h2>System</h2>
