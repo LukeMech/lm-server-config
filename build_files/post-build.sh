@@ -37,6 +37,14 @@ for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint 
     }
 done
 python3 -c 'import tomllib'
+# Every key policy.json points at must be in the image -- without it no
+# ghcr.io/lukemech image can be pulled (bootc upgrade, the webapp containers).
+for key in $(jq -r '.. | .keyPath? // empty' /etc/containers/policy.json); do
+    grep -q 'BEGIN PUBLIC KEY' "${key}" || {
+        echo "error: ${key} (from policy.json) missing from the image" >&2
+        exit 1
+    }
+done
 test -x /usr/lib/systemd/system-generators/zram-generator
 
 # Validate every quadlet (and its # lm-server: directives) now, not at first

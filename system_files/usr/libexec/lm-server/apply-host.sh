@@ -37,7 +37,10 @@ if [[ -s ${HOST}/authorized_keys ]]; then
     done
 fi
 
-# Cockpit behind cloudflared: the public origin(s) must be allowed.
+# Cockpit behind cloudflared: the public origin(s) must be allowed. Setting
+# Origins replaces Cockpit's default (the address in the browser), so the LAN
+# ones -- hostname, localhost, every current IP -- are listed as well;
+# otherwise https://<ip>:9090 loads but its websocket is refused.
 {
     echo "# Written by lm-server from [host] cockpit_origins -- do not edit."
     echo "[WebService]"
@@ -45,6 +48,10 @@ fi
     if [[ -n ${H[COCKPIT_ORIGINS]:-} ]]; then
         origins=""
         for o in ${H[COCKPIT_ORIGINS]}; do origins+="${o} ${o/https:/wss:} "; done
+        for h in localhost "$(hostnamectl hostname)" $(hostname -I 2>/dev/null); do
+            [[ ${h} == *:* ]] && h="[${h}]"
+            origins+="https://${h}:9090 wss://${h}:9090 "
+        done
         echo "Origins = ${origins% }"
     fi
 } >/etc/cockpit/cockpit.conf.new
