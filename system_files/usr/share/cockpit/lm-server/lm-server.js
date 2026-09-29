@@ -541,8 +541,13 @@ function renderResources() {
         let badge;
         if (!r.enabled) badge = `<span class="badge">Not configured</span>`;
         else if (states.every(s => s === "active")) badge = `<span class="badge ok">Running</span>`;
-        else if (states.some(s => s === "failed")) badge = `<span class="badge warn">Failed</span>`;
-        else badge = `<span class="badge warn">${esc(states.join(", "))}</span>`;
+        else {
+            // The pod and its containers: name the ones that aren't running.
+            const down = Object.entries(r.units).filter(([, s]) => s !== "active");
+            const label = down.some(([, s]) => s === "failed") ? "Failed"
+                : down.some(([, s]) => s === "activating") ? "Starting" : "Stopped";
+            badge = `<span class="badge warn">${label}</span><span class="sub">${esc(down.map(([u, s]) => `${u}: ${s}`).join(", "))}</span>`;
+        }
 
         const cpu = r.cpu_percent == null ? "—" : `${r.cpu_percent.toFixed(r.cpu_percent < 10 ? 1 : 0)}%`;
         const cpuLim = r.cpu_limit ? r.cpu_limit * 100 : null;

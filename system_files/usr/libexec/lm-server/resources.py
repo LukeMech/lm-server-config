@@ -31,9 +31,11 @@ def catalog():
         yield name, units.split(), desc
 
 
-def show(units):
+def show(units, props=PROPS):
     """systemctl show for several units: {Id: {prop: value}}."""
-    out = run("systemctl", "show", "-p", PROPS, *units)
+    if not units:
+        return {}
+    out = run("systemctl", "show", "-p", props, *units)
     result, cur = {}, {}
     for line in out.stdout.splitlines() + [""]:
         if not line:
@@ -96,6 +98,11 @@ def main(argv):
     with_du = "--no-disk" not in argv
     services = list(catalog())
     units = sorted({u + ".service" for _, us, _ in services for u in us})
+    # A pod's unit stays active while one of its containers fails: the
+    # containers count too (the units the pod wants -- quadlet adds them).
+    members = {}
+    for pod, info in show([u for u in units if u.endswith("-pod.service")], "Id,Wants").items():
+        members[pod] = [w for w in info.get("Wants", "").split() if w.endswith(".service")]
     slices = [f"lm-server-{name}.slice" for name, _, _ in services]
 
     with ThreadPoolExecutor(max_workers=6) as pool:
@@ -103,7 +110,7 @@ def main(argv):
         before = show(slices)
         t0 = time.monotonic()
         time.sleep(1)
-        after = show(slices + units)
+        after = show(slices + units + sorted({m for ms in members.values() for m in ms}))
         dt = time.monotonic() - t0
 
         result = []
@@ -120,7 +127,8 @@ def main(argv):
                 # Not a container: a program of the system image with its own
                 # unit (cloudflared) -- updated with the image, not by podman.
                 "builtin": all(u.startswith("lm-server-") for u in us),
-                "units": {u: after.get(u + ".service", {}).get("ActiveState", "unknown") for u in us},
+                "units": {x.removesuffix(".service"): after.get(x, {}).get("ActiveState", "unknown")
+                          for u in us for x in [u + ".service", *members.get(u + ".service", [])]},
                 "cpu_percent": None if cpu is None else round(cpu, 1),  # 100 = one core
                 "cpu_limit": seconds(a.get("CPUQuotaPerSecUSec")),       # cores
                 "memory": number(a.get("MemoryCurrent")),

@@ -5,7 +5,8 @@ ConditionPathExists=/var/lib/lm-server/env/disks/enabled
 [Container]
 ContainerName=filebrowser
 Pod=disks.pod
-Image=docker.io/gtsteffaniak/filebrowser:stable
+# FileBrowser Quantum (github.com/gtsteffaniak/filebrowser) -- published as gtstef/.
+Image=docker.io/gtstef/filebrowser:stable
 AutoUpdate=registry
 User=0:0
 Environment=FILEBROWSER_CONFIG=/home/filebrowser/config/config.yaml
