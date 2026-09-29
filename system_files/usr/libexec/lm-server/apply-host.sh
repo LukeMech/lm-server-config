@@ -67,7 +67,13 @@ fi
     if [[ -n ${H[COCKPIT_ORIGINS]:-} ]]; then
         origins=""
         for o in ${H[COCKPIT_ORIGINS]}; do origins+="${o} ${o/https:/wss:} "; done
-        for h in localhost "$(hostnamectl hostname)" $(hostname -I 2>/dev/null); do
+        # The LAN addresses only, sorted: not those of podman's/libvirt's
+        # bridges (they come and go as services start and stop) nor IPv6
+        # privacy addresses (they rotate). Otherwise the file changes all the
+        # time -- and every change restarts Cockpit, ending every session.
+        lan=$(ip -o addr show scope global 2>/dev/null |
+            awk '$2 !~ /^(podman|veth|virbr|vnet|cni|br-|docker)/ && !/ temporary / { split($4, a, "/"); print a[1] }' | sort -u)
+        for h in localhost "$(hostnamectl hostname)" ${lan}; do
             [[ ${h} == *:* ]] && h="[${h}]"
             origins+="https://${h}:9090 wss://${h}:9090 "
         done

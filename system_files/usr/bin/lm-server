@@ -243,32 +243,35 @@ repo_pull() {
 # spawned -- a sync killed halfway, its commit never recorded. As a service it
 # runs to the end; this side only follows its journal.
 run_detached() {
-    local unit="lm-server-run-${$}-${RANDOM}"
-    local rcfile="/run/${unit}.rc" rc=""
-    systemd-run --quiet --unit="${unit}" --collect --service-type=exec \
+    local unit="lm-server-run-${$}-${RANDOM}.service" sub rc
+    # Results of runs whose follower went away (e.g. with the Cockpit session).
+    systemctl list-units --all --plain --no-legend 'lm-server-run-*.service' |
+        awk '$4 == "exited" || $3 == "failed" { print $1 }' |
+        xargs -r sh -c 'systemctl stop "$@"; systemctl reset-failed "$@"' _ 2>/dev/null || true
+    # /usr/bin/lm-server itself, not through a shell: then it runs in the same
+    # SELinux domain as lm-server-sync.service (unconfined). Started as
+    # /bin/bash it stays init_t, which may not touch the services' volumes.
+    # RemainAfterExit keeps the unit, and its exit status, until read below.
+    systemd-run --quiet --unit="${unit}" --service-type=exec -p RemainAfterExit=yes \
         -p StandardOutput=journal -p StandardError=journal --setenv=LMS_DETACHED=1 \
-        /bin/bash -c '/usr/bin/lm-server "$@"; echo $? >"$0"' "${rcfile}" "$@"
+        /usr/bin/lm-server "$@"
     # Its own output only (-u would add systemd's "Started ..." lines too).
     journalctl -f -n all -o cat "_SYSTEMD_UNIT=${unit}" &
     local follow=$!
-    while [[ ! -e ${rcfile} ]]; do
-        case $(systemctl is-active "${unit}" 2>/dev/null) in
-        active | activating | deactivating) ;;
-        *)
-            sleep 1
-            [[ -e ${rcfile} ]] || rc=1 # gone without a result
-            break
-            ;;
+    while :; do
+        sub=$(systemctl show -p SubState --value "${unit}" 2>/dev/null || true)
+        case ${sub} in
+        exited | failed | dead | "") break ;;
         esac
         sleep 0.5
     done
+    rc=$(systemctl show -p ExecMainStatus --value "${unit}" 2>/dev/null || true)
+    [[ -n ${sub} && ${rc} =~ ^[0-9]+$ ]] || rc=1 # gone without a result
     sleep 1 # let the journal catch up
     kill "${follow}" 2>/dev/null || true
     wait "${follow}" 2>/dev/null || true
-    if [[ -z ${rc} ]]; then
-        rc=$(<"${rcfile}")
-        rm -f "${rcfile}"
-    fi
+    systemctl stop "${unit}" 2>/dev/null || true
+    systemctl reset-failed "${unit}" 2>/dev/null || true
     return "${rc}"
 }
 
@@ -290,6 +293,7 @@ cmd_sync() {
         lms_log "a sync is already running"
         return 0
     }
+    storage_cleanup
 
     local conf
     conf=$(repo_pull)
@@ -498,6 +502,16 @@ EOF
             [[ -n ${d} ]] && mkdir -p "${vol}/${d}"
         done <"${src}/volumes"
     fi
+}
+
+# storage_cleanup: a sync that died while moving data (see apply_storage)
+# can leave an image mounted under /run -- mounting it again next to that
+# would be two filesystems on one image. Unmounted before anything else.
+storage_cleanup() {
+    local m
+    for m in $(findmnt -rn -o TARGET | grep -E '^/run/lm-server-(from|to|new)\.' || true); do
+        umount "${m}" && rmdir "${m}" && lms_log "unmounted ${m}, left over from an interrupted data move"
+    done
 }
 
 # storage_check <svc> <folder>: warns if the folder is on the system disk,
@@ -795,7 +809,15 @@ cmd_upgrade() {
 cmd_update() {
     case ${1:-} in
     --dry-run | --check) podman auto-update --dry-run ;;
-    "") podman auto-update ;;
+    "")
+        # Restarts services: must not die halfway with a Cockpit session
+        # (see run_detached).
+        if [[ -z ${LMS_DETACHED:-} ]]; then
+            run_detached update
+            return
+        fi
+        podman auto-update
+        ;;
     *) lms_die "update: unknown argument $1" ;;
     esac
 }

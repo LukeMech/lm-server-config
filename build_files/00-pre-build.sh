@@ -21,6 +21,7 @@ dnf5 -y install \
     bootc \
     `# network, remote access, firewall` \
     firewalld \
+    iproute \
     NetworkManager \
     openssh-server \
     `# lm-server scripts: git (secrets repo), jq/curl (provisioning), python3 (render.py), rsync (moving data between disks), e2fsprogs (fixed-size data disks, [<svc>] disk)` \
