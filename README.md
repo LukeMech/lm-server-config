@@ -11,13 +11,13 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
 - **Services**: podman [quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
   baked into the image. Their container images update separately from the system.
 - **Web UI**: Cockpit (`proxmox.lukemech.org` via the tunnel, or `https://<ip>:9090`
-  on the LAN). The Overview page has an **Updates** card: the system image,
-  containers and config (up to date or what's available), *Update all* and
-  *Show details*. The **Updates** page does the work (each step's status,
-  a progress bar from `bootc --progress-fd`); its details view has
-  deployments and rollback, the container table, config sync and the history of
-  automatic runs. The **lm-server** page covers the config editor, status and
-  GitHub setup. Stock Cockpit covers containers, VMs, **disks** and network.
+  on the LAN). The **Management** page: *Update all* (config, containers,
+  system image, each step's status and a progress bar from
+  `bootc --progress-fd`), deployments and rollback, every container with the
+  version it runs and the one available, status, the history of automatic
+  runs, the config editor and GitHub setup. What's pending shows in the
+  Overview page's Health card as a link to it. Stock Cockpit covers
+  containers, VMs, **disks** and network.
 - **Config**: one file, `lm-server.toml`, in the private **lm-server-config-secrets**
   repo. At first boot the server asks for GitHub credentials to fetch it.
   [`lm-server-config-secrets/`](lm-server-config-secrets/) is the template.
@@ -79,7 +79,7 @@ every boot, which includes every system upgrade. Turn this off with
 
 ## Updates
 
-Cockpit > **Updates** > *Update all* runs the three below in this order: config,
+Cockpit > **Management** > *Update all* runs the three below in this order: config,
 containers, then the system image (downloaded; it switches on the next reboot).
 
 | What | How | When |
@@ -98,7 +98,7 @@ If someone changed the repo meanwhile, the save is refused. Reload and redo the 
 Schedules are systemd timers, not cron. They take calendar expressions like
 `"daily"`, `"Sun 04:00"` or `"*-*-01 03:00"`. Check one with
 `systemd-analyze calendar "Sun 04:00"`. `lm-server status` shows the next run of
-each timer, and Cockpit > Updates > *Show details* > *Automatic runs* shows what they did.
+each timer, and Cockpit > Management > *Automatic runs* shows what they did.
 
 ## Disks
 
@@ -141,7 +141,7 @@ only write `<share>/<folder>`.
 `/var/mnt/nvme/immich`):
 1. The service is stopped.
 2. If the new folder is empty, the data is copied there (`rsync`,
-   progress in Cockpit > Updates > details > Automatic runs / `lm-server history`). If it
+   progress in Cockpit > Management > Automatic runs / `lm-server history`). If it
    already holds data, nothing is copied and that data is used as is.
 3. The folder is bind-mounted from the new place and the service starts again.
 4. The old copy stays where it was. Delete it by hand once everything works.

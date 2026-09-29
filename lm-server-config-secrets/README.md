@@ -9,7 +9,7 @@ The whole server config is one file: [`lm-server.toml`](lm-server.toml).
    To edit the config from Cockpit (it commits and pushes), give it
    *Contents: Read and write* on this repo instead.
 4. Enter the repo name and the token when the server asks at first boot (or
-   later with `sudo lm-server setup`, or Cockpit > lm-server).
+   later with `sudo lm-server setup`, or Cockpit > Management).
 
 After that, commit to the repo. The server pulls it on the `[updates] config`
 schedule (default hourly; `"manual"` means only at boot) and restarts only the

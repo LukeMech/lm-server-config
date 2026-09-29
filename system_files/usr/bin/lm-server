@@ -235,7 +235,49 @@ repo_pull() {
     echo "${conf}"
 }
 
+# run_detached <args>: runs `lm-server <args>` as a transient service of its
+# own, shows its output and returns its exit status. A sync can restart
+# cloudflared (the tunnel Cockpit is reached through) or Cockpit itself: the
+# Cockpit session that started it goes away, and with it every process it
+# spawned -- a sync killed halfway, its commit never recorded. As a service it
+# runs to the end; this side only follows its journal.
+run_detached() {
+    local unit="lm-server-run-${$}-${RANDOM}"
+    local rcfile="/run/${unit}.rc" rc=""
+    systemd-run --quiet --unit="${unit}" --collect --service-type=exec \
+        -p StandardOutput=journal -p StandardError=journal --setenv=LMS_DETACHED=1 \
+        /bin/bash -c '/usr/bin/lm-server "$@"; echo $? >"$0"' "${rcfile}" "$@"
+    # Its own output only (-u would add systemd's "Started ..." lines too).
+    journalctl -f -n all -o cat "_SYSTEMD_UNIT=${unit}" &
+    local follow=$!
+    while [[ ! -e ${rcfile} ]]; do
+        case $(systemctl is-active "${unit}" 2>/dev/null) in
+        active | activating | deactivating) ;;
+        *)
+            sleep 1
+            [[ -e ${rcfile} ]] || rc=1 # gone without a result
+            break
+            ;;
+        esac
+        sleep 0.5
+    done
+    sleep 1 # let the journal catch up
+    kill "${follow}" 2>/dev/null || true
+    wait "${follow}" 2>/dev/null || true
+    if [[ -z ${rc} ]]; then
+        rc=$(<"${rcfile}")
+        rm -f "${rcfile}"
+    fi
+    return "${rc}"
+}
+
 cmd_sync() {
+    # From a terminal or Cockpit: as its own service (see run_detached).
+    # lm-server-sync/-firstboot.service are one already (LMS_DETACHED=1).
+    if [[ -z ${LMS_DETACHED:-} ]]; then
+        run_detached sync "$@"
+        return
+    fi
     local force=0
     [[ ${1:-} == --force ]] && force=1
     lms_load_secrets || {
@@ -596,7 +638,8 @@ cmd_status() {
 # What the automatic jobs did lately (container updates, system upgrades, syncs).
 cmd_history() {
     journalctl --no-pager -o short-iso -n "${1:-100}" \
-        -u podman-auto-update.service -u lm-server-upgrade.service -u lm-server-sync.service
+        -u podman-auto-update.service -u lm-server-upgrade.service -u lm-server-sync.service \
+        -u 'lm-server-run-*.service'
 }
 
 # --progress: bootc's progress events (JSON Lines, one object per line) on

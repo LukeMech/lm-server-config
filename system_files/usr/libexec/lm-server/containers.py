@@ -31,15 +31,16 @@ def image_info(inspect):
 
 
 def containers():
-    out = run("podman", "ps", "-a", "--format", "json", timeout=60)
+    # --pod: fills in PodName (the service of a multi-container service)
+    out = run("podman", "ps", "-a", "--pod", "--format", "json", timeout=60)
     if out.returncode:
         raise RuntimeError(out.stderr.strip() or "podman ps failed")
     result = []
     for c in json.loads(out.stdout or "[]"):
         labels = c.get("Labels") or {}
         unit = labels.get("PODMAN_SYSTEMD_UNIT")
-        if not unit:
-            continue  # ad-hoc container, not part of the system
+        if not unit or c.get("IsInfra"):
+            continue  # ad-hoc container, or a pod's infra (pause) container
         name = (c.get("Names") or [""])[0]
         result.append({
             "service": c.get("PodName") or unit.removesuffix(".service"),

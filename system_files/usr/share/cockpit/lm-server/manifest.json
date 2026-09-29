@@ -1,17 +1,20 @@
 {
     "version": 0,
+    "name": "updates",
+    "priority": 10,
     "require": {
         "cockpit": "300"
     },
     "menu": {
         "index": {
-            "label": "lm-server",
+            "label": "Management",
             "order": 1,
             "keywords": [
                 {
-                    "matches": ["config", "toml", "services", "secrets", "github", "sync"]
+                    "matches": ["update", "upgrade", "bootc", "image", "containers", "podman", "config", "toml", "sync", "rollback", "secrets", "github"]
                 }
             ]
         }
-    }
+    },
+    "preload": ["index"]
 }
