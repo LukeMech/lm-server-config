@@ -1,0 +1,13 @@
+[Unit]
+Description=lm-server: drop the unused "/" line from /etc/fstab
+Documentation=file:///usr/libexec/lm-server/fstab-drop-root.sh
+# Only on bootc's read-only composefs root (where the line is never used).
+ConditionPathIsReadWrite=!/
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lm-server/fstab-drop-root.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -16,6 +16,7 @@ grep -q '^containers:' /etc/subgid || echo 'containers:2147483647:2147483648' >>
 
 systemctl enable \
     lm-server-firstboot.service \
+    lm-server-fstab.service \
     lm-server-prune-adhoc.service \
     lm-server-services.service \
     lm-server-sync.timer \
