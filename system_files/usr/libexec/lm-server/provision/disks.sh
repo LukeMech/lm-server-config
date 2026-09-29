@@ -22,8 +22,27 @@ key=$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "${cfg}" | head -n1)
 [[ -n ${key} ]] || lms_die "disks: no API key in ${cfg}"
 api() { curl -fsS -H "X-API-Key: ${key}" -H 'Content-Type: application/json' "$@"; }
 
-# GUI login. A plain password is stored hashed by Syncthing itself.
-jq '{user, password}' "${ST}" | api -X PATCH -d @- "${URL}/config/gui" >/dev/null
+st_up() {
+    local _
+    for _ in $(seq 1 60); do
+        curl -fsS -o /dev/null "${URL}/noauth/health" 2>/dev/null && return 0
+        sleep 2
+    done
+    lms_die "disks: syncthing's API doesn't answer"
+}
+
+# GUI login. A plain password is stored hashed by Syncthing itself. A GUI
+# change restarts Syncthing's web server, which drops this very request
+# ("Empty reply") -- so no answer is fine; what counts is the result.
+want_user=$(jq -r .user "${ST}")
+if [[ $(api "${URL}/config/gui" | jq -r .user) != "${want_user}" ]] ||
+    ! curl -fsS -o /dev/null -u "${want_user}:$(jq -r .password "${ST}")" "${URL}/system/ping" 2>/dev/null; then
+    jq '{user, password}' "${ST}" | api -X PATCH -d @- "${URL}/config/gui" >/dev/null 2>&1 || true
+    sleep 2
+    st_up
+    [[ $(api "${URL}/config/gui" | jq -r .user) == "${want_user}" ]] ||
+        lms_die "disks: syncthing didn't take the GUI login"
+fi
 
 # Folders: added if missing (Syncthing's defaults + id/label/path); an existing
 # one (e.g. from a migrated config) gets its path corrected. Sharing them with
