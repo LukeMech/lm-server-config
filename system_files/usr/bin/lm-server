@@ -294,6 +294,7 @@ cmd_sync() {
         return 0
     }
     storage_cleanup
+    storage_migrate
 
     local conf
     conf=$(repo_pull)
@@ -430,7 +431,9 @@ apply_storage() {
     [[ -n ${size} ]] && want="${folder:-${LMS_STATE}/disks}/${svc}.img"
     unit=$(systemd-escape -p --suffix=mount "${vol}")
     file="/etc/systemd/system/${unit}"
+    # Now: a bind mount (unit file), or an image (its /etc/fstab entry).
     [[ -f ${file} ]] && cur=$(sed -n 's/^What=//p' "${file}")
+    [[ -n ${cur} ]] || cur=$(fstab_image "${svc}")
     mkdir -p "${vol}"
 
     if [[ ${want} != "${cur}" ]]; then
@@ -450,9 +453,14 @@ apply_storage() {
         fi
         lms_log "${svc}: data location ${cur:-system disk} -> ${want:-system disk}${size:+ (${size} of its own)}"
         systemctl stop "${units[@]}" 2>/dev/null || true
-        if [[ -n ${cur} ]]; then
+        if [[ -f ${file} ]]; then
             systemctl disable --now "${unit}" || true
             rm -f "${file}"
+        fi
+        if [[ -n $(fstab_image "${svc}") ]]; then
+            systemctl stop "${unit}" || true
+            image_detach "${cur}"
+            fstab_image_set "${svc}" ""
         fi
         [[ -z ${folder} ]] || storage_check "${svc}" "${folder}"
 
@@ -486,21 +494,7 @@ apply_storage() {
         [[ -z ${stage_to} ]] || { umount "${stage_to}" && rmdir "${stage_to}"; }
 
         if [[ -n ${size} ]]; then
-            cat >"${file}" <<EOF
-# Written by lm-server: [${svc}] storage (+ disk) in lm-server.toml.
-[Unit]
-Description=lm-server: ${svc} data (${size} image)
-RequiresMountsFor=${want%/*}
-
-[Mount]
-What=${want}
-Where=${vol}
-Type=ext4
-Options=loop,noatime
-
-[Install]
-WantedBy=local-fs.target
-EOF
+            fstab_image_set "${svc}" "${want}"
         elif [[ -n ${want} ]]; then
             cat >"${file}" <<EOF
 # Written by lm-server: [${svc}] disk in lm-server.toml.
@@ -518,7 +512,11 @@ WantedBy=local-fs.target
 EOF
         fi
         systemctl daemon-reload
-        [[ -z ${want} ]] || systemctl enable --now "${unit}"
+        if [[ -n ${size} ]]; then
+            systemctl start "${unit}" # generated from /etc/fstab
+        elif [[ -n ${want} ]]; then
+            systemctl enable --now "${unit}"
+        fi
     elif [[ -n ${size} ]]; then
         disk_image_grow "${svc}" "${want}" "${size}"
     fi
@@ -529,6 +527,76 @@ EOF
             [[ -n ${d} ]] && mkdir -p "${vol}/${d}"
         done <"${src}/volumes"
     fi
+}
+
+# A service's image is mounted from /etc/fstab, by the UUID of its
+# filesystem: Cockpit > Storage only knows fstab, and a mount it can't find
+# there it reports as "won't be mounted after the next boot". The loop
+# device the UUID shows up on is attached first by lm-server-image@<image>
+# (x-systemd.requires). nofail: an image that's missing doesn't stop the
+# boot -- only its service stays down (RequiresMountsFor).
+
+# fstab_image <svc>: the image in the service's /etc/fstab entry, if any.
+fstab_image() {
+    sed -n "s|^# lm-server $1: \([^ ]*\.img\) .*|\1|p" /etc/fstab 2>/dev/null | head -n1
+}
+
+# fstab_image_set <svc> <image>: writes its entry (a marker comment and the
+# mount line); with "" as the image it's removed.
+fstab_image_set() {
+    local svc=$1 img=$2 tmp uuid req
+    tmp=$(mktemp /etc/.fstab.XXXXXX)
+    awk -v tag="# lm-server ${svc}: " 'index($0, tag) == 1 { skip = 1; next } skip { skip = 0; next } { print }' \
+        /etc/fstab >"${tmp}"
+    if [[ -n ${img} ]]; then
+        uuid=$(blkid -s UUID -o value "${img}")
+        req=$(systemd-escape -p --template=lm-server-image@.service "${img}")
+        printf '# lm-server %s: %s (storage in lm-server.toml; written by lm-server)\n' "${svc}" "${img}" >>"${tmp}"
+        printf 'UUID=%s %s ext4 noatime,nofail,x-systemd.device-timeout=30s,x-systemd.requires=%s 0 0\n' \
+            "${uuid}" "${LMS_VOLUMES}/${svc}" "${req}" >>"${tmp}"
+    fi
+    # In place: keeps the file's owner, mode and SELinux label.
+    cat "${tmp}" >/etc/fstab
+    rm -f "${tmp}"
+}
+
+# image_attach <image>: a loop device for it (once), for its UUID to appear.
+image_attach() {
+    losetup -j "$1" -n -O NAME | grep -q . || losetup --find "$1"
+    udevadm settle --timeout=10 2>/dev/null || true
+}
+
+# image_detach <image>: frees its loop devices (the stopped mount's).
+image_detach() {
+    local dev
+    for dev in $(losetup -j "$1" -n -O NAME); do
+        losetup -d "${dev}" 2>/dev/null || true
+    done
+}
+
+# storage_migrate: images mounted by a unit of their own (lm-server before
+# fstab entries) are moved to /etc/fstab -- their service stopped for it.
+storage_migrate() {
+    local f what where svc unit
+    for f in /etc/systemd/system/*.mount; do
+        [[ -f ${f} ]] || continue
+        what=$(sed -n 's/^What=//p' "${f}")
+        where=$(sed -n 's/^Where=//p' "${f}")
+        [[ ${what} == *.img && ${where} == "${LMS_VOLUMES}"/* ]] || continue
+        svc=${where##*/}
+        unit=${f##*/}
+        local -a units=()
+        mapfile -t units < <(lms_units "${svc}")
+        lms_log "${svc}: its storage moves to /etc/fstab (for Cockpit > Storage) -- restarting"
+        systemctl stop "${units[@]}" 2>/dev/null || true
+        systemctl disable --now "${unit}" || true
+        rm -f "${f}"
+        image_detach "${what}"
+        fstab_image_set "${svc}" "${what}"
+        systemctl daemon-reload
+        systemctl start "${unit}"
+        ! lms_enabled "${svc}" || systemctl start --no-block "${units[@]}"
+    done
 }
 
 # storage_cleanup: a sync that died while moving data (see apply_storage)
@@ -875,6 +943,9 @@ update) need_root update "$@" && cmd_update "$@" ;;
 containers) need_root containers "$@" && "${LMS_LIBEXEC}/containers.py" "$@" ;;
 resources) need_root resources "$@" && "${LMS_LIBEXEC}/resources.py" "$@" ;;
 prune-adhoc) need_root prune-adhoc && "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
+# lm-server-image@.service (boot, before the fstab mount of a storage image)
+image-attach) image_attach "$1" ;;
+image-detach) image_detach "$1" ;;
 *)
     usage
     exit 1

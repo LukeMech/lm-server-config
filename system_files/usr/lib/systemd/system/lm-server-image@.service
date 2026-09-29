@@ -1,0 +1,15 @@
+[Unit]
+Description=lm-server: loop device for %f
+Documentation=file:///usr/bin/lm-server
+# Pulled in by the /etc/fstab entry of a service's storage image
+# (x-systemd.requires): attaches the image, so the UUID it's mounted by exists.
+DefaultDependencies=no
+RequiresMountsFor=%f
+Conflicts=umount.target
+Before=umount.target local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/lm-server image-attach %f
+ExecStop=-/usr/bin/lm-server image-detach %f

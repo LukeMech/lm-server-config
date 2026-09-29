@@ -74,6 +74,14 @@ def disk(svc, with_du):
     if os.path.exists(unit):
         with open(unit) as f:
             what = next((l.split("=", 1)[1].strip() for l in f if l.startswith("What=")), "")
+    if not what:
+        # A storage image: mounted from its /etc/fstab entry (see lm-server).
+        tag = f"# lm-server {svc}: "
+        try:
+            with open("/etc/fstab") as f:
+                what = next((l[len(tag):].split()[0] for l in f if l.startswith(tag)), "")
+        except OSError:
+            pass
     if what.endswith(".img"):
         info.update(kind="image", image=what)
     elif what:
