@@ -261,8 +261,8 @@ function renderSummary() {
                 (pending.length > 4 ? `<li>and ${pending.length - 4} more</li>` : "");
             tile("tile-containers", "info", `⬆ ${pending.length} of ${total} have a newer image`, [], `<ul class="muted">${names}</ul>`);
         } else {
-            const stopped = state.ctr.filter(c => c.state !== "running").length;
-            tile("tile-containers", "ok", `✔ All ${total} up to date`, [stopped ? `${stopped} not running` : ""]);
+            // (Running or not: the Services card, which stays current.)
+            tile("tile-containers", "ok", `✔ All ${total} up to date`, []);
         }
     }
 
@@ -474,7 +474,7 @@ function renderContainers() {
         prev = c.service;
         return `<tr class="${first ? "group" : ""}">
             <td>${first ? `<strong>${esc(c.service)}</strong>` : ""}</td>
-            <td>${esc(c.container)}${c.state !== "running" ? ` <span class="badge warn">${esc(c.state)}</span>` : ""}<span class="sub">${esc(c.image)}</span></td>
+            <td>${esc(c.container)}<span class="sub">${esc(c.image)}</span></td>
             <td>${imgText(c.current)}</td>
             <td>${avail}</td></tr>`;
     }).join("") || `<tr><td colspan="4" class="muted">No system containers.</td></tr>`;
