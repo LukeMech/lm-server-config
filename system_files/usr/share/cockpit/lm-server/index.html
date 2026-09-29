@@ -37,6 +37,20 @@
 
             <p class="hint"><em>Update all</em> applies the config from GitHub, updates the containers (only services with a new image restart) and downloads the system image, which switches on the next reboot.</p>
         </section>
+        <section class="card" id="services">
+            <header>
+                <h2>Services</h2>
+                <div class="actions">
+                    <button data-action="resources">Refresh</button>
+                </div>
+            </header>
+            <table class="deployments services">
+                <thead><tr><th>Service</th><th>State</th><th>CPU</th><th>Memory</th><th>Disk</th></tr></thead>
+                <tbody id="svc-rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+            <p class="hint">All of a service's containers together. CPU: 100% = one core. Limits: <code>cpus</code>, <code>memory</code> and <code>storage</code> (a size) in its section of lm-server.toml; <code>disk</code> = where its data lives. CPU and memory refresh every 10 seconds, disk on <em>Refresh</em>.</p>
+            <pre class="log" hidden></pre>
+        </section>
         <div class="system-top">
             <section class="card">
                 <header><h2>System</h2></header>
@@ -87,16 +101,6 @@
             <pre class="log" hidden></pre>
         </section>
 
-        <section class="card" id="status">
-            <header>
-                <h2>Status</h2>
-                <div class="actions">
-                    <button data-action="status">Refresh</button>
-                </div>
-            </header>
-            <pre class="log"></pre>
-        </section>
-
         <section class="card" id="history">
             <header>
                 <h2>Automatic runs</h2>
@@ -104,34 +108,44 @@
                     <button data-action="history">Refresh</button>
                 </div>
             </header>
-            <p class="hint">Scheduled container updates, system upgrades and config syncs.</p>
-            <pre class="log"></pre>
+            <div class="scroll">
+                <table class="deployments history">
+                    <thead><tr><th>When</th><th>Source</th><th>Message</th></tr></thead>
+                    <tbody id="history-rows"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+            <p class="hint">Scheduled container updates, system upgrades and config syncs, and the ones started here — newest first.</p>
         </section>
+
         <section class="card" id="config">
             <header>
                 <h2>Configuration (lm-server.toml)</h2>
                 <div class="actions">
                     <button data-action="cfg-sync">Sync configs</button>
-                    <button data-action="config-load">Reload from GitHub</button>
+                    <button data-action="config-load" id="config-load">Edit</button>
                     <button class="primary" data-action="config-save" id="config-save" disabled>Save, push &amp; apply</button>
                 </div>
             </header>
             <dl class="sys-source" id="cfg-info"></dl>
-            <p class="hint">Edits the file in the secrets repo: saving checks it, commits and pushes it (the token needs <em>Contents: Read and write</em>), then applies it. Only services whose settings changed restart. <em>Sync configs</em> applies what's already on GitHub. Automatic sync: <code>[updates] config</code>.</p>
-            <textarea id="config-text" spellcheck="false" placeholder="Click “Reload from GitHub” to load the current file." aria-label="lm-server.toml"></textarea>
+            <p class="hint"><em>Sync configs</em> applies what's on GitHub now; only services whose settings changed restart (automatically: <code>[updates] config</code>). <em>Edit</em> loads the file: saving checks it, commits and pushes it (the token needs <em>Contents: Read and write</em>), then applies it.</p>
+            <textarea id="config-text" spellcheck="false" aria-label="lm-server.toml" hidden></textarea>
             <pre class="log" hidden></pre>
         </section>
 
         <section class="card" id="setup-card">
             <header><h2>Secrets repo (GitHub)</h2></header>
-            <form id="setup">
-                <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets"></label>
-                <label>Branch <input name="branch" value="main" required></label>
-                <label>Config file (.toml) in the repo <input name="config" placeholder="lm-server.toml"></label>
-                <label>GitHub username <input name="user" autocomplete="username"></label>
-                <label>Token <input name="token" type="password" autocomplete="off" placeholder="fine-grained, Contents: read-only"></label>
-                <div class="actions"><button class="primary" type="submit" data-action="setup">Save &amp; sync</button></div>
-            </form>
+            <dl class="sys-source" id="setup-info"><dt>Repository</dt><dd class="muted">Not set up yet</dd></dl>
+            <details class="setup">
+                <summary>Change repository or token…</summary>
+                <form id="setup">
+                    <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets"></label>
+                    <label>Branch <input name="branch" value="main" required></label>
+                    <label>Config file (.toml) in the repo <input name="config" placeholder="lm-server.toml"></label>
+                    <label>GitHub username <input name="user" autocomplete="username"></label>
+                    <label>Token <input name="token" type="password" autocomplete="off" placeholder="fine-grained, Contents: read-only"></label>
+                    <div class="actions"><button class="primary" type="submit" data-action="setup">Save &amp; sync</button></div>
+                </form>
+            </details>
             <pre class="log" hidden></pre>
         </section>
     </main>

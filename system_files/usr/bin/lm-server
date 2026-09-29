@@ -30,6 +30,7 @@ Configs (private lm-server-config-secrets repo)
 
 Services
   services               list services and their state
+  resources [--json]     CPU / memory / disk of each service vs. its limits
   start|stop|restart <service>
   logs <service> [-f]
   routes                 Cloudflare Tunnel routes this host expects
@@ -377,44 +378,94 @@ apply_service() {
 }
 
 # apply_storage <svc> <rendered-dir>: all data of a service lives in
-# volumes/<svc>. With `storage = "/var/mnt/<path>"` that's a bind mount of
-# exactly that folder; on a change the service is stopped and its data copied
-# over (only into an empty target -- the old copy is kept, never deleted).
-# Called from apply_service (its ${units[@]} are in scope).
+# volumes/<svc>. What's mounted there (from its section of lm-server.toml):
+#   disk = "/var/mnt/<path>"   a bind mount of exactly that folder
+#   storage = "80G"            a filesystem of that size: an ext4 image file,
+#                              <svc>.img in the disk folder (or in
+#                              /var/lib/lm-server/disks/), loop-mounted --
+#                              when it's full, only this service notices
+#   neither                    nothing: a plain folder on the system disk
+# (Rendered as the files "storage" = the folder and "disk" = the size -- the
+# older key names.) On a change the service is stopped and its data copied
+# over (only into an empty target -- the old copy is kept, never deleted). A
+# bigger size grows the image in place; a smaller one is refused. Called
+# from apply_service (its ${units[@]} are in scope).
 apply_storage() {
     local svc=$1 src=$2 vol="${LMS_VOLUMES}/$1"
-    local want="" cur="" unit file
-    [[ -f ${src}/storage ]] && want=$(<"${src}/storage")
+    local folder="" size="" want cur="" unit file
+    [[ -f ${src}/storage ]] && folder=$(<"${src}/storage")
+    [[ -f ${src}/disk ]] && size=$(<"${src}/disk")
+    want=${folder}
+    [[ -n ${size} ]] && want="${folder:-${LMS_STATE}/disks}/${svc}.img"
     unit=$(systemd-escape -p --suffix=mount "${vol}")
     file="/etc/systemd/system/${unit}"
     [[ -f ${file} ]] && cur=$(sed -n 's/^What=//p' "${file}")
     mkdir -p "${vol}"
 
     if [[ ${want} != "${cur}" ]]; then
-        lms_log "${svc}: data location ${cur:-system disk} -> ${want:-system disk}"
+        if [[ -n ${size} ]]; then
+            # The data has to fit (with 10% to spare), or nothing changes.
+            local need
+            need=$(du -sxb "${vol}" 2>/dev/null | cut -f1)
+            if ((${need:-0} > $(numfmt --from=iec "${size}") * 9 / 10)); then
+                lms_log "${svc}: error: its data ($(numfmt --to=iec "${need}")) doesn't fit in storage = \"${size}\" -- data location unchanged"
+                return 0
+            fi
+        fi
+        lms_log "${svc}: data location ${cur:-system disk} -> ${want:-system disk}${size:+ (${size} of its own)}"
         systemctl stop "${units[@]}" 2>/dev/null || true
         if [[ -n ${cur} ]]; then
             systemctl disable --now "${unit}" || true
             rm -f "${file}"
         fi
-        if [[ -n ${want} ]]; then
-            # Same filesystem as /var/lib/lm-server (nearest existing folder)
-            # = the disk behind it isn't mounted.
-            local probe=${want}
-            while [[ ! -e ${probe} ]]; do probe=${probe%/*}; done
-            [[ $(stat -c %d "${probe:-/}") != "$(stat -c %d "${LMS_STATE}")" ]] ||
-                lms_log "${svc}: warning: ${want} is on the system disk (no disk mounted there, see Cockpit > Storage)"
-            mkdir -p "${want}"
+        [[ -z ${folder} ]] || storage_check "${svc}" "${folder}"
+
+        # from: where the data is now; to: where it goes. Images are mounted
+        # under /run for the copy.
+        local from to stage_from="" stage_to=""
+        if [[ ${cur} == *.img ]]; then
+            stage_from=$(mktemp -d /run/lm-server-from.XXXXXX)
+            mount -o loop,ro "${cur}" "${stage_from}"
+            from=${stage_from}
+        else
+            from=${cur:-${vol}}
         fi
-        local from=${cur:-${vol}} to=${want:-${vol}}
+        if [[ -n ${size} ]]; then
+            disk_image_new "${svc}" "${want}" "${size}"
+            stage_to=$(mktemp -d /run/lm-server-to.XXXXXX)
+            mount -o loop "${want}" "${stage_to}"
+            to=${stage_to}
+        else
+            [[ -z ${folder} ]] || mkdir -p "${folder}"
+            to=${want:-${vol}}
+        fi
         if [[ -n $(ls -A "${from}" 2>/dev/null) && -z $(ls -A "${to}" 2>/dev/null) ]]; then
-            lms_log "${svc}: copying $(du -sh "${from}" | cut -f1) from ${from} to ${to}..."
+            lms_log "${svc}: copying $(du -sh "${from}" | cut -f1) from ${cur:-${vol}} to ${want:-${vol}}..."
             rsync -aHA "${from}/" "${to}/"
-            lms_log "${svc}: copied -- the old copy is left in ${from}; delete it once everything works"
+            lms_log "${svc}: copied -- the old copy is left in ${cur:-${vol}}; delete it once everything works"
         fi
-        if [[ -n ${want} ]]; then
+        [[ -z ${stage_from} ]] || { umount "${stage_from}" && rmdir "${stage_from}"; }
+        [[ -z ${stage_to} ]] || { umount "${stage_to}" && rmdir "${stage_to}"; }
+
+        if [[ -n ${size} ]]; then
             cat >"${file}" <<EOF
-# Written by lm-server: [${svc}] storage in lm-server.toml.
+# Written by lm-server: [${svc}] storage (+ disk) in lm-server.toml.
+[Unit]
+Description=lm-server: ${svc} data (${size} image)
+RequiresMountsFor=${want%/*}
+
+[Mount]
+What=${want}
+Where=${vol}
+Type=ext4
+Options=loop,noatime
+
+[Install]
+WantedBy=local-fs.target
+EOF
+        elif [[ -n ${want} ]]; then
+            cat >"${file}" <<EOF
+# Written by lm-server: [${svc}] disk in lm-server.toml.
 [Unit]
 Description=lm-server: ${svc} data on ${want%/*}
 
@@ -430,6 +481,8 @@ EOF
         fi
         systemctl daemon-reload
         [[ -z ${want} ]] || systemctl enable --now "${unit}"
+    elif [[ -n ${size} ]]; then
+        disk_image_grow "${svc}" "${want}" "${size}"
     fi
 
     local d
@@ -438,6 +491,59 @@ EOF
             [[ -n ${d} ]] && mkdir -p "${vol}/${d}"
         done <"${src}/volumes"
     fi
+}
+
+# storage_check <svc> <folder>: warns if the folder is on the system disk,
+# i.e. the disk meant to be mounted there isn't (same filesystem as
+# /var/lib/lm-server, judged by the nearest existing folder).
+storage_check() {
+    local probe=$2
+    while [[ ! -e ${probe} ]]; do probe=${probe%/*}; done
+    [[ $(stat -c %d "${probe:-/}") != "$(stat -c %d "${LMS_STATE}")" ]] ||
+        lms_log "$1: warning: $2 is on the system disk (no disk mounted there, see Cockpit > Storage)"
+}
+
+# disk_image_new <svc> <image> <size>: an empty ext4 filesystem in a file of
+# that size (space reserved up front), unless it exists already.
+disk_image_new() {
+    local img=$2
+    [[ -e ${img} ]] && return 0
+    mkdir -p "${img%/*}"
+    # btrfs: no copy-on-write for a file that's rewritten in place all the time.
+    chattr +C "${img%/*}" 2>/dev/null || true
+    fallocate -l "$3" "${img}" 2>/dev/null || truncate -s "$3" "${img}"
+    mkfs.ext4 -q -F -m 0 -L "${1:0:16}" "${img}"
+    # An empty filesystem, for the "copy only into an empty target" check.
+    local tmp
+    tmp=$(mktemp -d /run/lm-server-new.XXXXXX)
+    mount -o loop "${img}" "${tmp}"
+    rmdir "${tmp}/lost+found" 2>/dev/null || true
+    umount "${tmp}"
+    rmdir "${tmp}"
+    lms_log "$1: created its $3 filesystem (${img})"
+}
+
+# disk_image_grow <svc> <image> <size>: a bigger `storage` grows the image and its
+# filesystem, online if it's mounted. Smaller: refused (ext4 can't shrink live).
+disk_image_grow() {
+    local img=$2 want have dev
+    want=$(numfmt --from=iec "$3")
+    have=$(stat -c %s "${img}")
+    if ((want < have)); then
+        lms_log "$1: storage stays at $(numfmt --to=iec "${have}") -- it can't be made smaller (storage = \"$3\")"
+        return 0
+    fi
+    ((want > have)) || return 0
+    fallocate -l "$3" "${img}" 2>/dev/null || truncate -s "$3" "${img}"
+    dev=$(losetup -j "${img}" -n -O NAME | head -n1)
+    if [[ -n ${dev} ]]; then
+        losetup -c "${dev}"
+        resize2fs "${dev}" >/dev/null 2>&1
+    else
+        e2fsck -fp "${img}" >/dev/null
+        resize2fs "${img}" >/dev/null 2>&1
+    fi
+    lms_log "$1: storage grown to $3"
 }
 
 # apply_limits <svc> <rendered-dir>: CPU/RAM limits of lm-server-<svc>.slice,
@@ -690,6 +796,7 @@ upgrade) need_root upgrade "$@" && cmd_upgrade "$@" ;;
 rollback) need_root rollback && bootc rollback ;;
 update) need_root update "$@" && cmd_update "$@" ;;
 containers) need_root containers "$@" && "${LMS_LIBEXEC}/containers.py" "$@" ;;
+resources) need_root resources "$@" && "${LMS_LIBEXEC}/resources.py" "$@" ;;
 prune-adhoc) need_root prune-adhoc && "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
 *)
     usage

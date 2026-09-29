@@ -26,6 +26,11 @@
     }
 }
 
+/* Rules like main { display: grid } would beat the hidden attribute. */
+[hidden] {
+    display: none !important;
+}
+
 body {
     margin: 0;
     background: var(--bg);
@@ -335,7 +340,7 @@ table.containers td {
     vertical-align: top;
 }
 
-table.containers .sub {
+table.deployments .sub {
     display: block;
     color: var(--muted);
     font-size: 12px;
@@ -344,4 +349,69 @@ table.containers .sub {
 
 table.containers tr.group td {
     border-top: 2px solid var(--border);
+}
+
+/* ---- Services: value + bar against the limit */
+table.services td {
+    vertical-align: top;
+}
+
+.meter {
+    display: grid;
+    gap: 2px;
+    min-width: 120px;
+}
+
+.meter .bar {
+    height: 6px;
+    margin: 4px 0 2px;
+}
+
+.meter .bar.high .fill {
+    background: var(--warn);
+}
+
+/* ---- Automatic runs */
+.scroll {
+    max-height: 420px;
+    overflow: auto;
+    margin-top: 12px;
+}
+
+.scroll table.deployments {
+    margin-top: 0;
+}
+
+table.history td {
+    vertical-align: top;
+    font-size: 13px;
+}
+
+table.history td:first-child,
+table.history td:nth-child(2) {
+    white-space: nowrap;
+    color: var(--muted);
+}
+
+table.history tr.warn td:last-child { color: var(--warn); }
+table.history tr.bad td:last-child { color: #c9190b; }
+
+@media (prefers-color-scheme: dark) {
+    table.history tr.bad td:last-child { color: #f0564a; }
+}
+
+table.history thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card);
+}
+
+/* ---- Secrets repo */
+details.setup {
+    margin-top: 12px;
+}
+
+details.setup summary {
+    cursor: pointer;
+    color: var(--accent);
 }

@@ -104,60 +104,68 @@ each timer, and Cockpit > Management > *Automatic runs* shows what they did.
 
 Every service keeps all of its data in one folder,
 `/var/lib/lm-server/volumes/<service>/`. That's the Immich library and database,
-the FileBrowser/Syncthing shares, the Guacamole DB, and so on. By
-default the folder is on the system disk. To use a different disk for a
-service, set `storage` in its section of `lm-server.toml`:
+the FileBrowser/Syncthing shares, the Guacamole DB, and so on. Two keys in its
+section of `lm-server.toml` say where that data lives and how much of it
+there may be:
 
 ```toml
-[disks]
-storage = "/var/mnt/hdd-mirror/disks"    # HDD RAID 1, LV "disks"
 [immich]
-storage = "/var/mnt/hdd-mirror/immich"   # HDD RAID 1, LV "immich"
+disk = "/var/mnt/hdd-mirror/immich"   # where: this folder (default: the system disk)
+storage = "400G"                      # how much: a filesystem of exactly this size
 ```
 
-The service's data then lives in exactly that folder, bind-mounted in place of
-`volumes/<service>/`. It can be a volume of its own mounted there (an LVM
-logical volume, see below), which gives the service a fixed size, or a plain
-folder on a disk (e.g. `/var/mnt/nvme/kuma`). Each service needs its own
-folder: two services on the same one (or one inside the other) is a config
-error. If you change `storage` later, the next sync stops the service,
-copies its data to the new disk (only if the target is empty), and starts it
-again. The old copy is never deleted automatically.
+- **`disk`**: the data lives in exactly that folder, bind-mounted in place of
+  `volumes/<service>/`: a disk or LV mounted there, or a plain folder on a disk
+  (e.g. `/var/mnt/nvme/kuma`). Each service needs its own folder: two services
+  on the same one (or one inside the other) is a config error. Older configs
+  wrote this as `storage = "/var/mnt/..."`, which still works.
+- **`storage`**: the data goes into a filesystem of that size: an ext4 image
+  file, `<service>.img`, in the `disk` folder (or in `/var/lib/lm-server/disks/`
+  without one), loop-mounted at `volumes/<service>/`. When it's full, only that
+  service notices, never the system disk or the other services. The space is
+  reserved up front. A bigger value later grows it live; a smaller one is
+  refused (logged), since ext4 can't shrink while in use. No LVM needed: one
+  filesystem on the HDD mirror holds each service's image.
 
-For `[disks]` that gives, with `shares = ["files"]`:
+If you change either key later, the next sync stops the service, copies its
+data to the new place (only if the target is empty; into a new `storage` only
+if it fits with 10% to spare), and starts it again. The old copy is never
+deleted automatically.
+
+For `[disks]` the data looks like this, with `shares = ["files"]`:
 
 ```
-/var/mnt/hdd-mirror/disks/
-  shares/files/     FileBrowser source "files" (Syncthing: files/Keepass,
-                    files/Sync; documents in files/docs)
-  app/syncthing/    Syncthing config + keys (device ID)
-  app/filebrowser/  FileBrowser database
+shares/files/     FileBrowser source "files" (Syncthing: files/Keepass,
+                  files/Sync; documents in files/docs)
+app/syncthing/    Syncthing config + keys (device ID)
+app/filebrowser/  FileBrowser database
 ```
 
 Both containers see the shares as `/shares/<name>`; in `lm-server.toml` you
-only write `<share>/<folder>`.
+only write `<share>/<folder>`. With `storage = "80G"`, FileBrowser shows 80 GB as
+its maximum.
 
-**What happens on a `storage` change** (e.g. `/var/mnt/hdd-mirror/immich` →
+**What happens on a change** (e.g. `disk` from `/var/mnt/hdd-mirror/immich` to
 `/var/mnt/nvme/immich`):
 1. The service is stopped.
-2. If the new folder is empty, the data is copied there (`rsync`,
+2. If the new place is empty, the data is copied there (`rsync`,
    progress in Cockpit > Management > Automatic runs / `lm-server history`). If it
    already holds data, nothing is copied and that data is used as is.
-3. The folder is bind-mounted from the new place and the service starts again.
+3. The new place is mounted at `volumes/<service>/` and the service starts again.
 4. The old copy stays where it was. Delete it by hand once everything works.
 
-If the disk behind `storage` isn't mounted at boot, the service doesn't start
+If the disk behind `disk` isn't mounted at boot, the service doesn't start
 (`RequiresMountsFor`), so nothing gets written to the wrong disk. If the disk is
 **replaced with an empty one** mounted at the same path, the service starts
 empty, like a fresh install. Restore its data first (see below).
 
 **Moving data by hand**, e.g. for a large library over several sessions, or
-when restoring a backup:
+when restoring a backup (without `storage`; with it, let the sync copy):
 
 ```sh
 lm-server stop immich
 rsync -aHA --info=progress2 /var/lib/lm-server/volumes/immich/ /var/mnt/hdd-mirror/immich/
-# edit [immich] storage = "/var/mnt/hdd-mirror/immich" (Cockpit editor or the repo)
+# edit [immich] disk = "/var/mnt/hdd-mirror/immich" (Cockpit editor or the repo)
 lm-server sync      # target isn't empty -> no copy, just switch and start
 ```
 
@@ -167,37 +175,36 @@ data, wherever it lives.
 **CPU and RAM per service**: `cpus = 2` (cores, `0.5` works) and `memory = "4G"`
 in a service's section cap all of its containers together, like the
 cores/RAM of a Proxmox guest. They're applied live via the service's systemd
-slice `lm-server-<service>.slice`. Leave them out for no limit;
-`lm-server services` shows usage against the limit. Swap is **zram** (half of RAM,
-zstd), configured in `/usr/lib/systemd/zram-generator.conf`.
+slice `lm-server-<service>.slice` (cgroups, the kernel's own limits; podman
+isn't involved). Leave them out for no limit. Cockpit > Management > Services
+(or `lm-server resources`) shows each service's CPU, RAM and disk against its
+limits. Swap is **zram** (half of RAM, zstd), configured in
+`/usr/lib/systemd/zram-generator.conf`.
 
 Disks are set up once, by hand, in **Cockpit > Storage** (formatting wipes
 them). Cockpit writes `/etc/fstab`, and bootc keeps `/etc` across upgrades.
-Set the disks up **before** pointing `storage` at them: a sync against a path
+Set the disks up **before** pointing `disk` at them: a sync against a path
 that isn't mounted yet writes to the system disk (and warns about it).
 
-- **HDD mirror**, split into a fixed-size volume per service:
+- **HDD mirror**:
   1. *Create MDRAID device*: RAID 1, both HDDs, name `hdd-mirror`.
-  2. *Create LVM2 volume group* `hdd-mirror` on the new `/dev/md/hdd-mirror`.
-  3. In the group, *Create new logical volume* twice, each formatted **XFS**
-     and mounted at boot:
-     - `immich`, 400 GB, mount point `/var/mnt/hdd-mirror/immich`
-     - `disks`, 80 GB, mount point `/var/mnt/hdd-mirror/disks`
+  2. Format `/dev/md/hdd-mirror` **XFS**, mount point `/var/mnt/hdd-mirror`,
+     mounted at boot.
+  3. `disk = "/var/mnt/hdd-mirror/immich"` + `storage = "400G"` in `[immich]`,
+     `disk = "/var/mnt/hdd-mirror/disks"` + `storage = "80G"` in `[disks]`.
+     Each gets a filesystem of that size; the rest of the mirror stays free
+     for growing them.
 
-     Leave the rest of the group unallocated. XFS can grow (Cockpit: *Grow*,
-     online) but never shrink, so spare space in the group is what lets either
-     volume grow later.
-  4. `storage = "/var/mnt/hdd-mirror/disks"` in `[disks]` and
-     `storage = "/var/mnt/hdd-mirror/immich"` in `[immich]`. Each service sees
-     its own volume, so FileBrowser shows ~80 GB as its maximum.
+  (Alternative: LVM on the mirror with one logical volume per service mounted
+  at its folder. Then leave `storage` out: the volume's size is the limit.)
 - **NVMe**: format the whole disk **XFS**, mount point `/var/mnt/nvme`. No RAID.
 
 Suggested layout for this machine:
 
 | Disk | Use |
 |---|---|
-| 120 GB SSD (`sda`) | system (bootc), small services on the default `storage` |
-| 2×500 GB HDD, RAID 1 + LVM | `/var/mnt/hdd-mirror/immich` (400 GB), `/var/mnt/hdd-mirror/disks` (80 GB) |
+| 120 GB SSD (`sda`) | system (bootc), the small services (their own `storage` each, no `disk`) |
+| 2×500 GB HDD, RAID 1 | `/var/mnt/hdd-mirror`: immich (400 GB), disks (80 GB) |
 | 2 TB NVMe | `/var/mnt/nvme`: scratch space, staging for moves and restores |
 
 The NVMe is a single disk. Keep a backup of anything on it that you can't lose.
@@ -319,7 +326,7 @@ NetworkName=lm-server-kuma
 `lm-server.toml`
 ```toml
 [kuma]
-storage = "/var/mnt/nvme/kuma"   # optional, like cpus / memory
+disk = "/var/mnt/nvme/kuma"   # optional, like storage / cpus / memory
 # any key becomes an env var: admin_email = "..." -> ADMIN_EMAIL
 ```
 

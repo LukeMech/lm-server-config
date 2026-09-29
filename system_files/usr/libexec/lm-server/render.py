@@ -43,15 +43,16 @@ import tomllib
 
 QUADLETS = os.environ.get("LMS_QUADLET_DIR", "/usr/share/containers/systemd")
 # Every service keeps all of its data in VOLUMES/<service>/. By default that's
-# on the system disk; `storage = "/var/mnt/<path>"` in its section bind-mounts
-# exactly that folder there instead (lm-server moves the data on a change).
+# on the system disk; `disk = "/var/mnt/<path>"` in its section bind-mounts
+# exactly that folder there instead, `storage = "80G"` makes it a filesystem
+# of that size (lm-server moves the data on a change).
 VOLUMES = "/var/lib/lm-server/volumes"
 CACHE = "/var/lib/lm-server/cache"
 GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
 CHECK_ONLY = False  # `check`: validate without side effects (no podman)
 
 # Keys of a service section lm-server handles itself (never passed as env).
-RESERVED = {"storage", "cpus", "memory", "env", "users"}
+RESERVED = {"storage", "disk", "cpus", "memory", "env", "users"}
 
 # Services that are part of the system rather than quadlets.
 BUILTIN = {
@@ -218,25 +219,51 @@ def limits(sec, out, where):
     out.write("limits", "".join(f"{p}\n" for p in props))
 
 
-def storage(sec, out, where, taken):
-    """Optional `storage = "/var/mnt/<path>"`: the folder holding this service's data.
+def is_path(v):
+    return isinstance(v, str) and v.startswith("/")
 
-    Used as is (e.g. an LV mounted at /var/mnt/hdd-mirror/immich). `taken` maps
-    the folders already claimed to their service: two services can't share one,
-    nor sit inside each other's."""
-    path = sec.get("storage", "")
+
+def location(sec, out, where, taken):
+    """Optional `disk = "/var/mnt/<path>"`: the folder holding this service's
+    data (older configs: `storage = "/var/mnt/..."`, still understood).
+
+    Used as is (e.g. an LV mounted at /var/mnt/hdd-mirror/immich, or a folder
+    on a disk). `taken` maps the folders already claimed to their service: two
+    services can't share one, nor sit inside each other's."""
+    path = sec.get("disk", "")
+    if not path and is_path(sec.get("storage")):
+        path = sec["storage"]
     if not path:
         return
+    if not is_path(path):
+        raise ConfigError(f"{where}.disk is where the data lives, a folder under /var/mnt"
+                          f" (got '{path}'; a size goes in storage = \"...\")")
     if path.startswith("/mnt/"):
         path = "/var" + path  # /mnt is a symlink to /var/mnt on bootc
     path = posixpath.normpath(path)
     if not re.fullmatch(r"/var/(mnt|srv)/[^\s]+", path):
-        raise ConfigError(f"{where}.storage must be a folder under /var/mnt (got '{path}')")
+        raise ConfigError(f"{where}.disk must be a folder under /var/mnt (got '{path}')")
     for other, p in taken.items():
         if path == p or path.startswith(p + "/") or p.startswith(path + "/"):
-            raise ConfigError(f"{where}.storage '{path}' overlaps [{other}] storage '{p}' -- give each service its own folder")
+            raise ConfigError(f"{where}.disk '{path}' overlaps [{other}] disk '{p}' -- give each service its own folder")
     taken[where] = path
-    out.write("storage", f"{path}\n")
+    out.write("storage", f"{path}\n")  # rendered name kept from the old key
+
+
+SIZE_UNITS = {"M": 1 << 20, "G": 1 << 30, "T": 1 << 40}
+
+
+def size(sec, out, where):
+    """Optional `storage = "80G"`: the service's data in a filesystem of exactly
+    that size (an image file in its `disk` folder, or on the system disk), so
+    when it's full only this service notices. Can be raised later, not lowered."""
+    value = sec.get("storage")
+    if value is None or is_path(value):
+        return
+    m = re.fullmatch(r"([0-9]+)([MGT])", str(value).upper())
+    if not m or int(m[1]) * SIZE_UNITS[m[2]] < 256 << 20:
+        raise ConfigError(f"{where}.storage must be a size of at least 256M, like \"512M\" or \"80G\" (got '{value}')")
+    out.write("disk", f"{m[1]}{m[2]}\n")  # rendered as "disk" (the size)
 
 
 # ---------------------------------------------------------------- renderers
@@ -437,7 +464,8 @@ def cmd_render(toml_path, out_root):
             no_placeholders(sec, name)
             CUSTOM.get(name, r_generic)(name, spec, sec, out, ctx)
             volumes(out, *spec["volumes"])
-            storage(sec, out, name, taken)
+            location(sec, out, name, taken)
+            size(sec, out, name)
             limits(sec, out, name)
             os.makedirs(target, mode=0o700, exist_ok=True)
         except (ConfigError, subprocess.CalledProcessError, OSError) as e:

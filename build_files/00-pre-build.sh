@@ -23,9 +23,10 @@ dnf5 -y install \
     firewalld \
     NetworkManager \
     openssh-server \
-    `# lm-server scripts: git (secrets repo), jq/curl (provisioning), python3 (render.py), rsync (moving data between disks)` \
+    `# lm-server scripts: git (secrets repo), jq/curl (provisioning), python3 (render.py), rsync (moving data between disks), e2fsprogs (fixed-size data disks, [<svc>] disk)` \
     coreutils \
     curl \
+    e2fsprogs \
     git \
     jq \
     python3 \

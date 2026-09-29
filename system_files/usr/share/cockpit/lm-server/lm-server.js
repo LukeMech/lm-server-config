@@ -369,7 +369,7 @@ function updateAll() {
             if (onData) prog.hidden = true;
             renderRun();
         }
-        await Promise.all([loadSystem(), loadContainers(), loadConfig(), loadStatus()]);
+        await Promise.all([loadSystem(), loadContainers(), loadConfig(), loadResources(false), loadHistory()]);
         state.checkedAt = new Date();
         state.run.reboot = !!sysInfo().staged;
         const sys = state.run.steps[2];
@@ -494,9 +494,91 @@ function renderConfig() {
         <dt>On GitHub</dt><dd><code>${esc(shortRev(c.REMOTE_REV))}</code> ${cfgPending() ? `<span class="badge info">New</span>` : `<span class="badge ok">Applied</span>`}</dd>`;
 }
 
-// ---- Status and history: read-only, own logs, don't block the buttons
-const loadStatus = () => run(["status"], $("status").querySelector(".log"));
-const loadHistory = () => run(["history", "200"], $("history").querySelector(".log"));
+// ---- Services: CPU / memory / disk of each service vs. its limits
+const iec = n => {
+    if (n == null) return "—";
+    for (const u of ["B", "K", "M", "G", "T"]) {
+        if (n < 1024 || u === "T") return u === "B" ? `${n} B` : `${n.toFixed(n < 10 ? 1 : 0)} ${u}iB`;
+        n /= 1024;
+    }
+};
+let resources = null;
+let resourcesRunning = false;
+
+// with_disk: also measure data folders that aren't a filesystem of their own
+// (du -- slow on big ones). Without it, the last measured values stay.
+function loadResources(withDisk) {
+    if (resourcesRunning) return Promise.resolve();
+    resourcesRunning = true;
+    const args = ["/usr/bin/lm-server", "resources", "--json", ...(withDisk ? [] : ["--no-disk"])];
+    return cockpit.spawn(args, root)
+        .then(out => {
+            const prev = Object.fromEntries((resources || []).map(r => [r.service, r]));
+            resources = JSON.parse(out);
+            for (const r of resources) {
+                const old = prev[r.service]?.disk;
+                if (r.disk.used == null && old?.used != null) r.disk = old;
+            }
+            renderResources();
+        })
+        .catch(ex => {
+            if (!resources) $("svc-rows").innerHTML = `<tr><td colspan="5" class="muted">${esc(problem(ex))}</td></tr>`;
+        })
+        .finally(() => { resourcesRunning = false; });
+}
+
+// A value, and a bar when there's a limit to compare it with.
+function meter(text, fraction, sub) {
+    const bar = fraction == null ? ""
+        : `<div class="bar${fraction > 0.9 ? " high" : ""}"><div class="fill" data-pct="${Math.min(100, Math.round(fraction * 100))}"></div></div>`;
+    return `<div class="meter">${bar}<span>${text}</span>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+}
+
+function renderResources() {
+    if (!resources) return;
+    $("svc-rows").innerHTML = resources.map(r => {
+        const states = Object.values(r.units);
+        let badge;
+        if (!r.enabled) badge = `<span class="badge">Not configured</span>`;
+        else if (states.every(s => s === "active")) badge = `<span class="badge ok">Running</span>`;
+        else if (states.some(s => s === "failed")) badge = `<span class="badge warn">Failed</span>`;
+        else badge = `<span class="badge warn">${esc(states.join(", "))}</span>`;
+
+        const cpu = r.cpu_percent == null ? "—" : `${r.cpu_percent.toFixed(r.cpu_percent < 10 ? 1 : 0)}%`;
+        const cpuLim = r.cpu_limit ? r.cpu_limit * 100 : null;
+        const mem = r.memory_limit ? `${iec(r.memory)} / ${iec(r.memory_limit)}` : iec(r.memory);
+        const d = r.disk;
+        const diskText = d.size ? `${iec(d.used)} / ${iec(d.size)}` : d.error ? esc(d.error) : iec(d.used);
+        const diskSub = { image: "own filesystem", storage: esc(d.folder), system: "system disk" }[d.kind];
+        return `<tr>
+            <td><strong>${esc(r.service)}</strong><span class="sub">${esc(r.description)}</span></td>
+            <td>${badge}</td>
+            <td>${meter(cpuLim ? `${cpu} of ${Math.round(cpuLim)}%` : cpu, cpuLim && r.cpu_percent != null ? r.cpu_percent / cpuLim : null)}</td>
+            <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null)}</td>
+            <td>${meter(diskText, d.size && d.used != null ? d.used / d.size : null, diskSub)}</td></tr>`;
+    }).join("") || `<tr><td colspan="5" class="muted">No services.</td></tr>`;
+    // Widths set here, not in the markup (Cockpit's CSP: no inline styles).
+    $("svc-rows").querySelectorAll(".fill[data-pct]").forEach(f => { f.style.width = f.dataset.pct + "%"; });
+}
+
+// While the page is shown (Cockpit hides it in the background otherwise).
+setInterval(() => { if (!cockpit.hidden) loadResources(false); }, 10000);
+
+// ---- Automatic runs: the journal of the update/sync units, as a table
+const HISTORY_LINE = /^(\d{4}-\d\d-\d\dT[\d:]+(?:[+-][\d:]+|Z)?) \S+ ([^\s[:]+)(?:\[\d+\])?: (.*)$/;
+function loadHistory() {
+    return cockpit.spawn(["/usr/bin/lm-server", "history", "300"], root)
+        .then(out => {
+            const rows = out.split("\n").map(l => l.match(HISTORY_LINE)).filter(Boolean).reverse();
+            $("history-rows").innerHTML = rows.map(([, ts, src, msg]) => {
+                const cls = /error|fail|✘/i.test(msg) ? "bad" : /warn|skipped/i.test(msg) ? "warn" : "";
+                const when = new Date(ts);
+                return `<tr class="${cls}"><td title="${esc(ts)}">${esc(when.toLocaleString())}</td>
+                    <td>${esc(src)}</td><td>${esc(msg)}</td></tr>`;
+            }).join("") || `<tr><td colspan="3" class="muted">Nothing yet.</td></tr>`;
+        })
+        .catch(ex => { $("history-rows").innerHTML = `<tr><td colspan="3" class="muted">${esc(problem(ex))}</td></tr>`; });
+}
 
 // ---- lm-server.toml editor
 function configLoad() {
@@ -508,6 +590,8 @@ function configLoad() {
         .then(([rev, text]) => {
             configBase = rev.trim();
             $("config-text").value = text;
+            $("config-text").hidden = false;
+            $("config-load").textContent = "Reload from GitHub";
             log.hidden = false;
             log.classList.remove("failed");
             log.textContent = "Loaded commit " + configBase.slice(0, 7) + ".";
@@ -525,7 +609,7 @@ function configSave() {
     return exclusive(async () => {
         const ok = await run(["config", "save", "--base", configBase], $("config").querySelector(".log"),
                              undefined, false, $("config-text").value.replace(/\r\n/g, "\n"));
-        if (ok) await Promise.all([configLoad(), loadConfig(), loadStatus()]);
+        if (ok) await Promise.all([configLoad(), loadConfig(), loadResources(false)]);
     });
 }
 
@@ -542,8 +626,14 @@ function setupLoad() {
                 if (key === "BRANCH") form.elements.branch.value = value;
                 else if (fields[key] && value) form.elements[fields[key]].placeholder = value;
             }
+            const f = form.elements;
+            $("setup-info").innerHTML = `
+                <dt>Repository</dt><dd><code>${esc(f.repo.placeholder)}</code> (${esc(f.branch.value)})</dd>
+                <dt>Config file</dt><dd><code>${esc(f.config.placeholder)}</code></dd>
+                <dt>GitHub user</dt><dd>${esc(f.user.placeholder || "—")}</dd>`;
         })
-        .catch(() => { /* not set up yet, or no admin access: keep the defaults */ });
+        // Not set up yet (or no admin access): the form open, with the defaults.
+        .catch(() => { $("setup").closest("details").open = true; });
 }
 
 $("setup").addEventListener("submit", event => {
@@ -558,7 +648,7 @@ $("setup").addEventListener("submit", event => {
     form.elements.token.value = "";
     exclusive(async () => {
         await run(args, $("setup-card").querySelector(".log"), undefined, false, token);
-        await Promise.all([setupLoad(), loadConfig(), loadStatus()]);
+        await Promise.all([setupLoad(), loadConfig(), loadResources(false)]);
     });
 });
 
@@ -593,11 +683,11 @@ const ACTIONS = {
     }),
     "ctr-update": () => exclusive(async () => {
         await run(["update"], $("containers").querySelector(".log"));
-        await Promise.all([loadContainers(), loadStatus()]);
+        await Promise.all([loadContainers(), loadResources(false)]);
     }),
     "cfg-sync": () => exclusive(async () => {
         await run(["sync"], $("config").querySelector(".log"));
-        await Promise.all([loadConfig(), loadStatus()]);
+        await Promise.all([loadConfig(), loadResources(false)]);
     }),
     "config-load": () => exclusive(configLoad),
     "config-save": configSave,
@@ -605,16 +695,17 @@ const ACTIONS = {
         if (!window.confirm("Remove every container not defined by the system image?")) return;
         return exclusive(async () => {
             await run(["prune-adhoc"], $("containers").querySelector(".log"));
-            await loadStatus();
+            await loadResources(false);
         });
     },
-    status: loadStatus,
+    resources: () => loadResources(true),
     history: loadHistory,
 };
 
 document.body.addEventListener("click", ev => {
     const button = ev.target.closest("button");
-    if (!button || button.disabled || button.type === "submit") return;
+    // The setup form's button submits the form (handled there).
+    if (!button || button.disabled || button.closest("form")) return;
     if (button.hasAttribute("data-reboot")) return reboot();
     const action = ACTIONS[button.dataset.action];
     if (action) action();
@@ -625,7 +716,7 @@ document.body.addEventListener("click", ev => {
 function start() {
     exclusive(checkAll);
     setupLoad();
-    loadStatus();
+    loadResources(true);
     loadHistory();
 }
 start();

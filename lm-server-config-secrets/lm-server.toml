@@ -37,18 +37,33 @@ adhoc_ephemeral = true
 
 # ------------------------------------------------------------------ services
 #
-# Data location: every service keeps its data in one folder. By default it's
-# on the system disk; `storage = "/var/mnt/<path>"` in a section puts it in
-# exactly that folder instead: a disk or volume mounted there, or a folder on
-# one (Cockpit > Storage). One folder per service. Change it any time --
-# lm-server stops the service, copies the data over and starts it again.
+# Every service is its own bubble: its own network, its own data, its own
+# CPU/RAM budget (all of its containers together). Per section:
 #
-# Resources: `cpus = 2` (cores, may be 0.5) and `memory = "4G"` cap a service
-# (all of its containers together); leave them out for no limit. Current
-# usage: `lm-server services`.
+#   disk = "/var/mnt/<path>"  where its data lives: exactly that folder (a disk
+#                             or LV mounted there, or a folder on one -- Cockpit
+#                             > Storage). Default: the system disk. One folder
+#                             per service.
+#   storage = "80G"           how much space it gets: its data goes into a
+#                             filesystem of exactly that size (an image file,
+#                             <service>.img, in the disk folder), so when it's
+#                             full only this service notices. Can be raised
+#                             later (grown live), not lowered. Leave it out on
+#                             a disk that is already sized for the service
+#                             (its own LV). Needs no LVM.
+#   cpus = 2                  CPU cores (may be 0.5)
+#   memory = "4G"             RAM (the service is restarted if it goes over)
+#
+# Change any of them any time: for disk/storage lm-server stops the service,
+# copies the data over and starts it again (the old copy stays). Leave a key
+# out for no limit. Current usage: Cockpit > Management > Services, or
+# `lm-server resources`.
 
 [disks]
-storage = "/var/mnt/hdd-mirror/disks" # HDD RAID 1, LV "disks"
+disk = "/var/mnt/hdd-mirror/disks" # HDD RAID 1
+storage = "80G"
+cpus = 1
+memory = "1G"
 # disk.lukemech.org (FileBrowser Quantum)
 filebrowser_admin = "admin"
 filebrowser_password = "CHANGE_ME"
@@ -56,7 +71,7 @@ filebrowser_password = "CHANGE_ME"
 syncthing_user = "admin"
 syncthing_password = "CHANGE_ME"
 # Shares: the top-level folders FileBrowser shows (default ["files"]). On the
-# disk: <storage>/shares/<name>, next to the apps' own state in app/.
+# disk: shares/<name> in its data, next to the apps' own state in app/.
 # One share keeps everything in one tree (docs in files/docs).
 shares = ["files"]
 # Syncthing folders as <share>/<path>; created if missing. Use the folder IDs
@@ -68,19 +83,34 @@ syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 # Web apps: repo/port are built in; the code is cloned with the GitHub token
 # from `lm-server setup`. Optional: branch = "...", github_token = "...".
 [toolbox]
+storage = "1G"
+cpus = 0.5
+memory = "512M"
+
 [website]
+storage = "1G"
+cpus = 0.5
+memory = "512M"
+
 [exp]
+storage = "1G"
+cpus = 1 # renders the CV at every start
+memory = "1G"
 # CV PDF compressed through iLovePDF (developer.ilovepdf.com, free plan);
 # leave it out to serve it uncompressed.
 # ilovepdf_public_key = "project_public_..."
 
 [convert]
+storage = "10G" # uploads and conversions
+cpus = 2
+memory = "2G"
 jwt_secret = "CHANGE_ME"
 users = [{ email = "you@example.com", password = "CHANGE_ME" }]
 # Any ConvertX setting: env = { AUTO_DELETE_EVERY_N_HOURS = "24" }
 
 [immich]
-storage = "/var/mnt/hdd-mirror/immich" # HDD RAID 1, LV "immich"
+disk = "/var/mnt/hdd-mirror/immich" # HDD RAID 1
+storage = "400G"
 cpus = 4
 memory = "6G"
 db_password = "CHANGE_ME" # letters and digits only
@@ -89,10 +119,16 @@ admin = { email = "you@example.com", password = "CHANGE_ME", name = "Admin" }
 env = { TZ = "Europe/Warsaw" }
 
 [remote]
+storage = "2G"
+cpus = 1
+memory = "1536M" # Guacamole is Java
 db_password = "CHANGE_ME"
 # An admin disables the default guacadmin account.
 users = [{ login = "lukasz", password = "CHANGE_ME", admin = true }]
 
 [sugar]
+storage = "5G" # Nightscout's MongoDB
+cpus = 1
+memory = "1G"
 api_secret = "CHANGE_ME" # min. 12 characters
 env = { DISPLAY_UNITS = "mg/dl", ENABLE = "careportal basal iob cob bridge", AUTH_DEFAULT_ROLES = "denied", TZ = "Europe/Warsaw" }
