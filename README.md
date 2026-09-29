@@ -227,6 +227,27 @@ reporting an error.
 Step by step, including Immich, disk_0/docs, Syncthing, FileBrowser and the
 ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 
+## Virtual machines
+
+Cockpit > Virtual machines creates and runs x86_64 VMs with KVM (full speed):
+Windows, other Linux distributions, anything that can't be a container.
+
+**Other architectures** (ARM64, RISC-V) run emulated: no KVM, so several times
+slower, but fine for testing (e.g. SBC images). Cockpit's *Create* dialog only
+makes VMs of the host's architecture, so create them once with `virt-install`;
+Cockpit then shows, starts and stops them (console included) like any other:
+
+```sh
+sudo virt-install --connect qemu:///system --name arm-test \
+  --arch aarch64 --machine virt --boot uefi \
+  --vcpus 2 --memory 2048 --disk size=20 \
+  --cdrom /var/lib/libvirt/images/debian-13-arm64-netinst.iso \
+  --os-variant debian13 --graphics vnc --noautoconsole
+```
+
+`--arch riscv64` works the same way. An existing disk image instead of an
+installer: `--import --disk path=/var/lib/libvirt/images/<image>.qcow2`.
+
 ## First install
 
 1. Download `lm-server-<tag>.iso` from the latest release. If it was split
