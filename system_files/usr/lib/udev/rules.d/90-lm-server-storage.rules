@@ -1,0 +1,5 @@
+# The loop devices of lm-server's storage images (<service>.img, `storage =`
+# in lm-server.toml): hidden in Cockpit > Storage, which lists loop devices
+# first and can't group them. Their use per service: Cockpit > Management >
+# Services. (udisks: HintIgnore.) The images stay mounted as always.
+SUBSYSTEM=="block", KERNEL=="loop*", ENV{DEVTYPE}=="disk", ATTR{loop/backing_file}=="*.img", ENV{UDISKS_IGNORE}="1"
