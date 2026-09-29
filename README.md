@@ -17,7 +17,8 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
   version it runs and the one available, status, the history of automatic
   runs, the config editor and GitHub setup. What's pending shows in the
   Overview page's Health card as a link to it. Stock Cockpit covers
-  containers, VMs, **disks** and network.
+  containers, VMs, **disks**, network, metrics history (PCP) and the
+  performance profile (tuned, set to `powersave`).
 - **Config**: one file, `lm-server.toml`, in the private **lm-server-config-secrets**
   repo. At first boot the server asks for GitHub credentials to fetch it.
   [`lm-server-config-secrets/`](lm-server-config-secrets/) is the template.

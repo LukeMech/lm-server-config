@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lm-server: Immich on the LAN (immich.pod publishes it on every address). -->
+<service>
+  <short>immich</short>
+  <description>Immich photo server, web UI and mobile app API (http://&lt;server&gt;:2283).</description>
+  <port protocol="tcp" port="2283"/>
+</service>

@@ -13,8 +13,8 @@ RequiresMountsFor=/var/lib/lm-server/volumes/immich
 PodName=immich
 Network=immich.network
 # On the LAN too (http://<server>:2283 -- the mobile app at home, no detour
-# through the tunnel), not only for cloudflared on localhost. Port opened in
-# the firewall (build_files/30-lm-server.sh).
+# through the tunnel), not only for cloudflared on localhost. Opened in the
+# firewall as the service "immich" (/usr/lib/firewalld/services/immich.xml).
 PublishPort=2283:2283
 
 [Service]
