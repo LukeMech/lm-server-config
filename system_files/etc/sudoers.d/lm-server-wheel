@@ -1,0 +1,4 @@
+# lm-server: the admin (wheel, from [host] admin_user) already signed in with
+# an SSH key or the Cockpit password -- sudo doesn't ask again. This also lets
+# Cockpit turn on administrative access without a password prompt.
+%wheel ALL=(ALL) NOPASSWD: ALL

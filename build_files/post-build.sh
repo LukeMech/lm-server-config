@@ -2,7 +2,7 @@
 set -ouex pipefail
 
 # Firmware / tools for hardware a headless server doesn't have (Wi-Fi, WWAN,
-# sound, NVIDIA). Kept: CPU microcode, GPU firmware for iGPUs, realtek-firmware
+# Bluetooth, sound, NVIDIA). Kept: CPU microcode, GPU firmware for iGPUs, realtek-firmware
 # (r8169 Ethernet). nfs-utils: nothing here mounts NFS (its rpc.statd only logs
 # errors at boot).
 REMOVE=(
@@ -20,12 +20,24 @@ REMOVE=(
     qcom-wwan-firmware
     tiwilink-firmware
     nfs-utils
+    # No Bluetooth on this server (the kernel modules are blocked in
+    # /usr/lib/modprobe.d/lm-server-no-bluetooth.conf).
+    bluez
+    bluez-hid2hci
+    bluez-libs
+    bluez-obexd
+    NetworkManager-bluetooth
 )
 installed=()
 for p in "${REMOVE[@]}"; do
     rpm -q "${p}" &>/dev/null && installed+=("${p}")
 done
 ((${#installed[@]})) && dnf5 -y remove "${installed[@]}"
+# Nothing Bluetooth may come back through another package's dependencies.
+if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
+    echo "error: Bluetooth packages in the image:" ${bt} >&2
+    exit 1
+fi
 
 # Hard check: every command the lm-server scripts, units and Cockpit page call.
 for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint systemd-escape flock base64 sha256sum od \

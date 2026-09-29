@@ -4,15 +4,20 @@
 # and restarts when a new commit lands.
 FROM quay.io/fedora/fedora-minimal:44
 
+# google-noto-color-emoji-fonts: emoji (flags too) in the rendercv CV --
+# Typst picks up system fonts and renders its COLRv1 glyphs in color.
 RUN dnf5 -y install --setopt=install_weak_deps=False \
         git-core \
+        google-noto-color-emoji-fonts \
         python3 \
         python3-babel \
         python3-flask \
         python3-flask-babel \
         python3-gunicorn \
         python3-pip \
-    && dnf5 -y clean all
+    && dnf5 -y clean all \
+    && python3 -m babel.messages.frontend --version \
+    && test -f /usr/share/fonts/google-noto-color-emoji-fonts/Noto-COLRv1.ttf
 
 # Everything the sites need that Fedora doesn't package -- one image for all
 # of them, nothing is installed per site at start:

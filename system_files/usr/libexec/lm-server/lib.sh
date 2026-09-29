@@ -77,7 +77,11 @@ lms_dir_hash() {
         echo none
         return
     }
-    (cd "$1" && find . -type f ! -name enabled -print0 | sort -z | xargs -0r sha256sum | sha256sum | cut -d' ' -f1)
+    # Contents and modes: a permission fix alone must reach the server too.
+    (cd "$1" && {
+        find . -type f ! -name enabled -print0 | sort -z | xargs -0r sha256sum
+        find . ! -name enabled -printf '%m %p\n' | sort
+    } | sha256sum | cut -d' ' -f1)
 }
 
 # lms_wait_http <url> [timeout-seconds] -- waits until the URL answers 2xx.

@@ -258,7 +258,12 @@ cmd_sync() {
 
     rm -rf "${LMS_ENV}/host"
     mv "${new}/host" "${LMS_ENV}/host"
-    "${LMS_LIBEXEC}/apply-host.sh" || lms_log "warning: host settings not fully applied"
+    # What changed (host settings, services apply_service stopped or
+    # restarted), for the summary below.
+    SYNC_CHANGED=()
+    local host_changed item
+    host_changed=$("${LMS_LIBEXEC}/apply-host.sh") || lms_log "warning: host settings not fully applied"
+    for item in ${host_changed}; do SYNC_CHANGED+=("host/${item}"); done
 
     local svc skipped=()
     for svc in $(lms_services); do
@@ -277,6 +282,13 @@ cmd_sync() {
 
     git -C "${LMS_REPO_DIR}" rev-parse HEAD >"${LMS_STATE}/config.rev"
     date -Is >"${LMS_STATE}/config.synced"
+    local rev
+    rev=$(git -C "${LMS_REPO_DIR}" rev-parse --short HEAD)
+    if ((${#SYNC_CHANGED[@]})); then
+        lms_log "synced ${rev} ($(secrets_config_path)) -- changed: ${SYNC_CHANGED[*]}"
+    else
+        lms_log "synced ${rev} ($(secrets_config_path)) -- no changes, nothing restarted"
+    fi
     # 3 = synced, but these services are unavailable until their section is fixed.
     if ((${#skipped[@]})); then
         lms_log "warning: skipped ${skipped[*]} -- fix lm-server.toml, then: lm-server config pull"
@@ -297,6 +309,7 @@ apply_service() {
             lms_log "${svc}: removed from ${LMS_CONFIG_FILE} -- stopping"
             systemctl stop "${units[@]}" || true
             rm -f "${dst}/enabled"
+            SYNC_CHANGED+=("${svc}")
         fi
         return 0
     fi
@@ -310,6 +323,7 @@ apply_service() {
     mv "${src}" "${dst}"
     touch "${dst}/enabled"
     lms_log "${svc}: config applied -- (re)starting"
+    SYNC_CHANGED+=("${svc}")
     systemctl reset-failed "${units[@]}" 2>/dev/null || true
     systemctl restart --no-block "${units[@]}"
     if [[ -x ${LMS_LIBEXEC}/provision/${svc}.sh ]]; then

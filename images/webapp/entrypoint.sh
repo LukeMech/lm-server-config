@@ -49,8 +49,14 @@ echo "webapp: ${APP_REPO}@${rev:0:12}"
 # Per-site virtualenv of older image versions.
 rm -rf /data/venv /data/.pip-state
 
+# Flask-Babel reads compiled .mo files; sites may ship only the .po sources.
+# Through the module: Fedora's python3-babel has no pybabel command.
 if [[ -d translations ]]; then
-    pybabel compile -f -d translations >/dev/null || echo "webapp: pybabel compile failed" >&2
+    if python3 -m babel.messages.frontend compile -f -d translations >/dev/null; then
+        echo "webapp: translations compiled ($(find translations -name '*.mo' | wc -l) catalogs)"
+    else
+        echo "webapp: compiling translations failed -- the site runs untranslated" >&2
+    fi
 fi
 if [[ -n ${APP_BUILD_CMD:-} ]]; then
     bash -c "${APP_BUILD_CMD}"

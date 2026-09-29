@@ -35,7 +35,7 @@ function run(args, card, input) {
                 return true;
             }
             if (ex.problem === "access-denied") {
-                log.textContent += "\n✘ needs administrative access: turn it on in the banner at the top of this page.";
+                log.textContent += "\n✘ needs administrative access: turn it on with “Limited access” in Cockpit's top bar.";
                 log.classList.add("failed");
                 return false;
             }
@@ -141,82 +141,13 @@ async function autoRun() {
 }
 autoRun();
 
-// ---- Administrative access: the same switch as Cockpit's "Limited access"
-// button in the top bar (the shell's cockpit.Superuser object), asked for
-// right here. Current: "none" = limited, "init" = still starting.
+// ---- Admin access switched on in Cockpit's top bar ("Limited access"
+// button): load what failed before. Current: "none" = limited, "init" = starting.
 const superuser = cockpit.dbus(null, { bus: "internal" }).proxy("cockpit.Superuser", "/superuser");
-const admin = document.getElementById("admin");
-const adminText = document.getElementById("admin-text");
-const adminPassword = document.getElementById("admin-password");
-const adminButton = document.getElementById("admin-button");
-const adminError = document.getElementById("admin-error");
-const adminDefault = adminText.textContent;
-let adminPrompting = false;
-let adminLimited = null;
-
-function adminReset(error) {
-    adminPrompting = false;
-    adminText.textContent = adminDefault;
-    adminPassword.hidden = true;
-    adminPassword.value = "";
-    adminButton.textContent = "Turn on administrative access";
-    adminButton.disabled = false;
-    adminError.hidden = !error;
-    adminError.textContent = error || "";
-}
-
-function adminStart() {
-    const method = Object.keys(superuser.Methods || {})[0] || (superuser.Bridges || [])[0];
-    if (!method) {
-        adminReset("No method to get administrative access (sudo) is available.");
-        return;
-    }
-    adminButton.disabled = true;
-    adminError.hidden = true;
-    // sudo asks through this signal; the answer goes back with Answer().
-    const onprompt = (_event, message, prompt, _def, echo, error) => {
-        adminPrompting = true;
-        adminText.textContent = message || "Please authenticate to gain administrative access.";
-        adminPassword.type = echo ? "text" : "password";
-        adminPassword.placeholder = (prompt || "Password").replace(/^\[sudo\] /, "").replace(/:\s*$/, "");
-        adminPassword.hidden = false;
-        adminButton.textContent = "Authenticate";
-        adminButton.disabled = false;
-        adminError.hidden = !error;
-        adminError.textContent = error || "";
-        adminPassword.focus();
-    };
-    superuser.addEventListener("Prompt", onprompt);
-    superuser.Stop()
-        .catch(() => {})
-        .then(() => superuser.Start(method))
-        .then(() => {
-            // Like the shell: remember it, so the next login starts with admin access.
-            try {
-                const key = window.localStorage.getItem("superuser-key");
-                if (key) window.localStorage.setItem(key, method);
-            } catch (_) { /* no storage: only this session */ }
-            adminReset();
-        })
-        .catch(err => adminReset(err && err.message !== "cancelled" ? String(err.message || err) : null))
-        .finally(() => superuser.removeEventListener("Prompt", onprompt));
-}
-
-document.getElementById("admin-form").addEventListener("submit", event => {
-    event.preventDefault();
-    if (!adminPrompting) {
-        adminStart();
-        return;
-    }
-    adminButton.disabled = true;
-    superuser.Answer(adminPassword.value);
-    adminPassword.value = "";
-});
-
+let wasLimited = null;
 superuser.addEventListener("changed", () => {
+    if (superuser.Current === "init") return;
     const limited = superuser.Current === "none";
-    admin.hidden = !limited;
-    // Just switched on (here or in the top bar): load what failed before.
-    if (adminLimited === true && !limited && superuser.Current !== "init") autoRun();
-    if (superuser.Current !== "init") adminLimited = limited;
+    if (wasLimited === true && !limited) autoRun();
+    wasLimited = limited;
 });

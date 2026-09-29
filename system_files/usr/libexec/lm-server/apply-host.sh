@@ -1,28 +1,45 @@
 #!/bin/bash
 # Applies [host] + [updates] of lm-server.toml (rendered to env/host/):
 # hostname, timezone, admin user, SSH keys, Cockpit origin, update schedules.
+# Every change is logged, and its short name printed on stdout (for the
+# summary of `lm-server sync`); stdout carries nothing else.
 set -euo pipefail
 . /usr/libexec/lm-server/lib.sh
+
+# changed <name> <message>
+changed() {
+    lms_log "host: $2"
+    echo "$1"
+}
 
 HOST="${LMS_ENV}/host"
 declare -A H=()
 lms_read_env "${HOST}/host.env" H
 set_if() { [[ -n ${1:-} && $1 != CHANGE_ME* ]]; }
 
-if set_if "${H[TIMEZONE]:-}"; then
-    timedatectl set-timezone "${H[TIMEZONE]}" || lms_log "invalid timezone ${H[TIMEZONE]}"
+if set_if "${H[TIMEZONE]:-}" && [[ $(timedatectl show -p Timezone --value) != "${H[TIMEZONE]}" ]]; then
+    if timedatectl set-timezone "${H[TIMEZONE]}"; then
+        changed timezone "timezone set to ${H[TIMEZONE]}"
+    else
+        lms_log "invalid timezone ${H[TIMEZONE]}"
+    fi
 fi
 if set_if "${H[HOSTNAME]:-}" && [[ $(hostnamectl hostname) != "${H[HOSTNAME]}" ]]; then
     hostnamectl set-hostname "${H[HOSTNAME]}"
+    changed hostname "hostname set to ${H[HOSTNAME]}"
 fi
 
 # Admin account (Cockpit + sudo).
 admin=${H[ADMIN_USER]:-}
 if set_if "${admin}"; then
-    id "${admin}" &>/dev/null || useradd -m -G wheel "${admin}"
+    if ! id "${admin}" &>/dev/null; then
+        useradd -m -G wheel "${admin}"
+        changed admin "admin ${admin} created"
+    fi
     usermod -aG wheel "${admin}"
-    if set_if "${H[ADMIN_PASSWORD_HASH]:-}"; then
+    if set_if "${H[ADMIN_PASSWORD_HASH]:-}" && [[ $(getent shadow "${admin}" | cut -d: -f2) != "${H[ADMIN_PASSWORD_HASH]}" ]]; then
         usermod -p "${H[ADMIN_PASSWORD_HASH]}" "${admin}"
+        changed admin-password "password of ${admin} updated"
     fi
 else
     admin=""
@@ -32,8 +49,10 @@ if [[ -s ${HOST}/authorized_keys ]]; then
     for u in root ${admin}; do
         home=$(getent passwd "${u}" | cut -d: -f6)
         [[ -n ${home} ]] || continue
+        cmp -s "${HOST}/authorized_keys" "${home}/.ssh/authorized_keys" && continue
         install -d -m 0700 -o "${u}" -g "${u}" "${home}/.ssh"
         install -m 0600 -o "${u}" -g "${u}" "${HOST}/authorized_keys" "${home}/.ssh/authorized_keys"
+        changed ssh-keys "SSH keys of ${u} updated"
     done
 fi
 
@@ -60,6 +79,7 @@ if cmp -s /etc/cockpit/cockpit.conf.new /etc/cockpit/cockpit.conf; then
 else
     mv -f /etc/cockpit/cockpit.conf.new /etc/cockpit/cockpit.conf
     systemctl try-restart cockpit.service || true
+    changed cockpit "Cockpit origins: ${H[COCKPIT_ORIGINS]:-(default)} -- Cockpit restarted"
 fi
 
 # Schedules are systemd timers (OnCalendar syntax: "hourly", "daily",
@@ -98,5 +118,6 @@ if ((${#CHANGED[@]})); then
     for t in "${CHANGED[@]}"; do
         systemctl enable "${t}" >/dev/null 2>&1 || true
         systemctl restart "${t}"
+        changed "${t%.timer}" "${t} schedule applied"
     done
 fi

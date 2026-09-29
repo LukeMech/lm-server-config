@@ -227,6 +227,9 @@ ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 4. The server fetches `lm-server.toml` and applies `[host]`: it creates the
    admin (`admin_user` / `admin_password_hash`) for Cockpit and sudo, plus SSH
    keys. Then it starts the configured services and creates their users.
+   Once signed in, the admin's `sudo` doesn't ask for the password again
+   (`/etc/sudoers.d/lm-server-wheel`), so Cockpit's *Administrative access*
+   switches on without a prompt; the browser remembers it for the next login.
 
 Locked out (the config never applied)? In the GRUB menu, press `e` and add
 `systemd.setenv=SYSTEMD_SULOGIN_FORCE=1 systemd.unit=rescue.target` to the

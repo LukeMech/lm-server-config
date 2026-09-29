@@ -179,12 +179,16 @@ class Out:
     def __init__(self, root):
         self.root = root
 
-    def write(self, rel, text, mode="w"):
+    def write(self, rel, text, mode="w", public=False):
+        """public: readable by any user -- for files a container reads as a
+        non-root user (never secrets)."""
         path = os.path.join(self.root, rel)
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
         with open(path, mode, encoding="utf-8", newline="\n") as f:
             f.write(text)
-        os.chmod(path, 0o600)
+        os.chmod(path, 0o644 if public else 0o600)
+        if public:
+            os.chmod(os.path.dirname(path), 0o755)
 
     def json(self, rel, obj):
         self.write(rel, json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
@@ -370,8 +374,9 @@ def r_remote(name, spec, sec, out, ctx):
         ).stdout
         with open(cache, "w", encoding="utf-8") as f:
             f.write(sql)
+    # Read by the postgres user of the DB container (schema only, no secrets).
     with open(cache, encoding="utf-8") as f:
-        out.write("initdb/001-guacamole-schema.sql", f.read())
+        out.write("initdb/001-guacamole-schema.sql", f.read(), public=True)
 
 
 CUSTOM = {"disks": r_disks, "immich": r_immich, "remote": r_remote}
