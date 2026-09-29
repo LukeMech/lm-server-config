@@ -42,7 +42,7 @@ fi
 # Hard check: every command the lm-server scripts, units and Cockpit page call.
 for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint systemd-escape flock base64 sha256sum od \
     useradd usermod getent timedatectl hostnamectl systemd-analyze \
-    firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs lvcreate smartctl; do
+    firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs lvcreate smartctl rpm-ostree; do
     command -v "${cmd}" >/dev/null || {
         echo "error: required command '${cmd}' missing from the image" >&2
         exit 1

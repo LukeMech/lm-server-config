@@ -12,20 +12,6 @@
     <main>
         <section class="card" data-log>
             <header>
-                <h2>System</h2>
-                <div class="actions">
-                    <button data-run="upgrade --check">Check for update</button>
-                    <button data-run="upgrade">Download update</button>
-                    <button class="primary" data-run="upgrade --apply" data-confirm="Download the new system image and reboot now?">Update &amp; reboot</button>
-                    <button data-run="rollback" data-confirm="Boot the previous system image on the next reboot?">Rollback</button>
-                </div>
-            </header>
-            <p class="hint">Whole-system image <code>ghcr.io/lukemech/lm-server</code>: an update applies on reboot and the previous image stays available for rollback.</p>
-            <pre class="log" hidden></pre>
-        </section>
-
-        <section class="card" data-log>
-            <header>
                 <h2>Containers</h2>
                 <div class="actions">
                     <button data-run="update --dry-run">Check for updates</button>
