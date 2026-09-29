@@ -1,0 +1,19 @@
+{
+    "version": 0,
+    "priority": 10,
+    "require": {
+        "cockpit": "300"
+    },
+    "menu": {
+        "index": {
+            "label": "Updates",
+            "order": 2,
+            "keywords": [
+                {
+                    "matches": ["update", "upgrade", "bootc", "image", "containers", "podman", "config", "sync", "rollback"]
+                }
+            ]
+        }
+    },
+    "preload": ["index"]
+}

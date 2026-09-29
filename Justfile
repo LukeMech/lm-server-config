@@ -58,7 +58,12 @@ build $target_image=image_name $tag=default_tag:
 build-image $name $tag=default_tag:
     #!/usr/bin/env bash
     set -euox pipefail
+    # Version = the date + commit tags CI pushes (Cockpit > Updates shows it;
+    # otherwise the Fedora base image's "44" would be inherited).
+    rev=$(git rev-parse HEAD 2>/dev/null || echo unknown)
     podman build --pull=newer \
+        --label "org.opencontainers.image.version=$(date -u +%Y%m%d).${rev::7}" \
+        --label "org.opencontainers.image.revision=${rev}" \
         --label "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}" \
         --label "org.opencontainers.image.title={{ image_name }}-${name}" \
         --tag "{{ image_name }}-${name}:${tag}" "images/${name}"

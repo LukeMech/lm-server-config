@@ -1,7 +1,8 @@
 #!/bin/bash
-# Web UI replacing the Proxmox GUI: the lm-server page (system + container
-# updates, configs), containers (cockpit-podman), VMs (cockpit-machines),
-# disks/RAID/mounts (cockpit-storaged), network.
+# Web UI replacing the Proxmox GUI: the Updates page (system image,
+# containers, config), the lm-server page (config editor, setup), containers
+# (cockpit-podman), VMs (cockpit-machines), disks/RAID/mounts
+# (cockpit-storaged), network.
 set -ouex pipefail
 
 dnf5 -y install \
@@ -15,7 +16,7 @@ dnf5 -y install \
     cockpit-ws
 
 # No per-package "Software updates" page: the system is updated as a whole
-# image from the lm-server page. The overrides in /etc/cockpit/ also hide it
+# image from the Updates page. The overrides in /etc/cockpit/ also hide it
 # if a dependency ever pulls one of these in.
 dnf5 -y remove cockpit-packagekit cockpit-ostree || true
 

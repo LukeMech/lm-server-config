@@ -9,7 +9,7 @@
             "order": 1,
             "keywords": [
                 {
-                    "matches": ["update", "upgrade", "bootc", "containers", "services", "secrets"]
+                    "matches": ["config", "toml", "services", "secrets", "github", "sync"]
                 }
             ]
         }

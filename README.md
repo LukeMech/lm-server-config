@@ -11,10 +11,13 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
 - **Services**: podman [quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
   baked into the image. Their container images update separately from the system.
 - **Web UI**: Cockpit (`proxmox.lukemech.org` via the tunnel, or `https://<ip>:9090`
-  on the LAN). The **lm-server** page covers system updates (deployments,
-  rollback, a progress bar from `bootc --progress-fd`) and container updates
-  with a live log, the history of automatic runs, config sync, and GitHub setup.
-  Stock Cockpit covers containers, VMs, **disks** and network.
+  on the LAN). The **Updates** page shows the system image, every container
+  (the version it runs and the one available) and the config, with one
+  *Update all* button; its status also appears in the Overview page's Health
+  card. *Show details* opens deployments and rollback (with a progress bar from
+  `bootc --progress-fd`), the container table, config sync and the history of
+  automatic runs. The **lm-server** page covers the config editor, status and
+  GitHub setup. Stock Cockpit covers containers, VMs, **disks** and network.
 - **Config**: one file, `lm-server.toml`, in the private **lm-server-config-secrets**
   repo. At first boot the server asks for GitHub credentials to fetch it.
   [`lm-server-config-secrets/`](lm-server-config-secrets/) is the template.
@@ -76,11 +79,14 @@ every boot, which includes every system upgrade. Turn this off with
 
 ## Updates
 
+Cockpit > **Updates** > *Update all* runs the three below in this order: config,
+containers, then the system image (downloaded; it switches on the next reboot).
+
 | What | How | When |
 |---|---|---|
 | System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
-| Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), Cockpit | `[updates] containers`, default `"daily"` |
-| Configs (lm-server.toml) | `lm-server config pull` (= `sync`), Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
+| Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), `lm-server containers` (running vs. available versions), Cockpit | `[updates] containers`, default `"daily"` |
+| Configs (lm-server.toml) | `lm-server config pull` (= `sync`), `lm-server config status`, Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
 
 **Editing the config from Cockpit**: *Configuration (lm-server.toml)* loads
 the file from the secrets repo. *Save, push & apply* checks it, commits and
@@ -92,7 +98,7 @@ If someone changed the repo meanwhile, the save is refused. Reload and redo the 
 Schedules are systemd timers, not cron. They take calendar expressions like
 `"daily"`, `"Sun 04:00"` or `"*-*-01 03:00"`. Check one with
 `systemd-analyze calendar "Sun 04:00"`. `lm-server status` shows the next run of
-each timer, and Cockpit > lm-server > *Automatic runs* shows what they did.
+each timer, and Cockpit > Updates > *Show details* > *Automatic runs* shows what they did.
 
 ## Disks
 
@@ -135,7 +141,7 @@ only write `<share>/<folder>`.
 `/var/mnt/nvme/immich`):
 1. The service is stopped.
 2. If the new folder is empty, the data is copied there (`rsync`,
-   progress in Cockpit > lm-server > Automatic runs / `lm-server history`). If it
+   progress in Cockpit > Updates > details > Automatic runs / `lm-server history`). If it
    already holds data, nothing is copied and that data is used as is.
 3. The folder is bind-mounted from the new place and the service starts again.
 4. The old copy stays where it was. Delete it by hand once everything works.

@@ -3,8 +3,11 @@
 # lm-server: env APP_REPO=LukeMech/CV
 # lm-server: env APP_MODULE=server:app
 # lm-server: env APP_PORT=7999
-# lm-server: env APP_BUILD_CMD=rendercv render Łukasz_Błaszczyk_CV_EN.yaml
-# lm-server: env APP_COMPRESS_PDF=en/Łukasz_Błaszczyk_CV.pdf
+# CV rendered at every start, then compressed with the repo's compress.sh
+# (iLovePDF, [exp] ilovepdf_public_key). Without a key, or if compressing
+# fails, the uncompressed PDF is served -- compress.sh uses set -e, so its
+# failure must not fail the build (the container would restart in a loop).
+# lm-server: env APP_BUILD_CMD=rendercv render Łukasz_Błaszczyk_CV_EN.yaml && if [ -z "${ILOVEPDF_PUBLIC_KEY:-}" ]; then echo "exp: no ilovepdf_public_key -- CV not compressed" >&2; else bash compress.sh cv || echo "exp: compress.sh failed -- serving the CV uncompressed" >&2; fi
 # lm-server: env APP_GITHUB_TOKEN={{github_token}}
 # lm-server: env APP_GITHUB_USER={{github_user}}
 [Unit]

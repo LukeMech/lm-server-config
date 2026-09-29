@@ -10,50 +10,12 @@
 </head>
 <body>
     <main>
-        <div class="system-top">
-            <section class="card">
-                <header><h2>System</h2></header>
-                <ul class="sys-status" id="sys-status"><li class="muted">Loading…</li></ul>
-            </section>
-            <section class="card">
-                <header><h2>Image source</h2></header>
-                <dl class="sys-source" id="sys-source"></dl>
-            </section>
-        </div>
-
-        <section class="card" data-log id="system">
+        <section class="card">
             <header>
-                <h2>Deployments and updates</h2>
-                <div class="actions">
-                    <button id="sys-check">Check for updates</button>
-                    <button id="sys-download">Download update</button>
-                    <button class="primary" id="sys-apply">Update &amp; reboot</button>
-                </div>
+                <h2>Updates</h2>
+                <div class="actions"><button class="primary" id="to-updates">Open Updates</button></div>
             </header>
-            <div class="progress" id="sys-progress" hidden>
-                <div class="progress-head"><strong id="sys-stage"></strong><span id="sys-amount"></span></div>
-                <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="sys-fill"></div></div>
-                <div class="progress-detail" id="sys-detail"></div>
-            </div>
-            <table class="deployments">
-                <thead><tr><th>Version</th><th>Status</th><th>Built</th><th>Image</th><th></th></tr></thead>
-                <tbody id="sys-deployments"></tbody>
-            </table>
-            <p class="hint">The whole system is one image: an update downloads it and switches on reboot; the previous one stays for rollback. Automatic updates: <code>[updates] system</code> in lm-server.toml.</p>
-            <pre class="log" hidden></pre>
-        </section>
-
-        <section class="card" data-log>
-            <header>
-                <h2>Containers</h2>
-                <div class="actions">
-                    <button data-run="update --dry-run">Check for updates</button>
-                    <button class="primary" data-run="update">Update containers</button>
-                    <button data-run="prune-adhoc" data-confirm="Remove every container not defined by the system image?">Remove ad-hoc containers</button>
-                </div>
-            </header>
-            <p class="hint">Pulls newer images of every service and restarts only what changed. A service that fails to come back is rolled back to its previous image.</p>
-            <pre class="log" hidden></pre>
+            <p class="hint">System image, container and config updates, with <em>Update all</em>, are on the <strong>Updates</strong> page (its status also shows on the Overview page).</p>
         </section>
 
         <section class="card" data-log>
@@ -62,19 +24,9 @@
                 <div class="actions">
                     <button data-run="status" data-auto>Refresh</button>
                     <button class="primary" data-run="sync --force">Sync configs</button>
+                    <button data-run="prune-adhoc" data-confirm="Remove every container not defined by the system image?">Remove ad-hoc containers</button>
                 </div>
             </header>
-            <pre class="log"></pre>
-        </section>
-
-        <section class="card" data-log>
-            <header>
-                <h2>Automatic runs</h2>
-                <div class="actions">
-                    <button data-run="history 200" data-auto>Refresh</button>
-                </div>
-            </header>
-            <p class="hint">Log of scheduled container updates, system upgrades and config syncs (schedules: <code>[updates]</code> in lm-server.toml).</p>
             <pre class="log"></pre>
         </section>
 

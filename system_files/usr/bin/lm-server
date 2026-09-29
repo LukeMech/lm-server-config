@@ -19,12 +19,14 @@ System (bootc image from ghcr.io/lukemech/lm-server)
 
 Containers (updated independently of the system)
   update [--dry-run]     pull newer container images and restart what changed
+  containers [--json]    image + version each container runs, and available updates
 
 Configs (private lm-server-config-secrets repo)
   setup                  (re)enter the GitHub repo + credentials
   sync [--force]         pull configs and apply them now
   config pull            = sync: fetch changes pushed to GitHub and apply them
   config show|save       print lm-server.toml / save a new one (stdin): commit, push, apply
+  config status          synced commit vs. the newest one on GitHub
 
 Services
   services               list services and their state
@@ -421,6 +423,7 @@ cmd_start_enabled() {
 # config show: the current lm-server.toml (freshly pulled).
 # config rev:  the commit it comes from (for `save --base`).
 # config source: repo, branch, config file path and GitHub user in use.
+# config status: the commit applied last (+ when) and the newest one on GitHub.
 # config save [--base <commit>] [--message <text>]: new lm-server.toml on
 #   stdin -> checked, committed and pushed to the secrets repo, then applied.
 #   Refused if the repo moved past <commit> meanwhile (someone else edited it).
@@ -443,6 +446,16 @@ cmd_config() {
         lms_env_line GITHUB_USER "${LMS_S[GITHUB_USER]:-}"
         return
     fi
+    if [[ ${sub} == status ]]; then
+        local remote
+        remote=$(lms_git ls-remote --exit-code "https://github.com/${LMS_S[REPO]}.git"             "refs/heads/${LMS_S[BRANCH]:-main}" | cut -f1) || lms_die "cannot read ${LMS_S[REPO]} from GitHub"
+        lms_env_line REPO "${LMS_S[REPO]}"
+        lms_env_line BRANCH "${LMS_S[BRANCH]:-main}"
+        lms_env_line SYNCED_REV "$(cat "${LMS_STATE}/config.rev" 2>/dev/null || true)"
+        lms_env_line SYNCED_AT "$(cat "${LMS_STATE}/config.synced" 2>/dev/null || true)"
+        lms_env_line REMOTE_REV "${remote}"
+        return
+    fi
     exec 9>/run/lm-server-sync.lock
     flock 9
     local conf
@@ -451,7 +464,7 @@ cmd_config() {
     show) cat "${conf}" ;;
     rev) git -C "${LMS_REPO_DIR}" rev-parse HEAD ;;
     save) config_save "${conf}" "$@" ;;
-    *) lms_die "usage: lm-server config pull|show|rev|source|save [--base <commit>] [--message <text>]" ;;
+    *) lms_die "usage: lm-server config pull|show|rev|source|status|save [--base <commit>] [--message <text>]" ;;
     esac
 }
 
@@ -633,6 +646,7 @@ logs) need_root logs "$@" && cmd_logs "$@" ;;
 upgrade) need_root upgrade "$@" && cmd_upgrade "$@" ;;
 rollback) need_root rollback && bootc rollback ;;
 update) need_root update "$@" && cmd_update "$@" ;;
+containers) need_root containers "$@" && "${LMS_LIBEXEC}/containers.py" "$@" ;;
 prune-adhoc) need_root prune-adhoc && "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
 *)
     usage

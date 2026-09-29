@@ -1,5 +1,5 @@
 [Unit]
-Description=lm-server: drop the unused "/" line from /etc/fstab
+Description=lm-server: match the system disk lines in /etc/fstab to bootc
 Documentation=file:///usr/libexec/lm-server/fstab-drop-root.sh
 # Only on bootc's read-only composefs root (where the line is never used).
 ConditionPathIsReadWrite=!/

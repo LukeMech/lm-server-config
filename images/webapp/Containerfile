@@ -22,7 +22,7 @@ RUN dnf5 -y install --setopt=install_weak_deps=False \
 # Everything the sites need that Fedora doesn't package -- one image for all
 # of them, nothing is installed per site at start:
 #   exp (LukeMech/CV): rendercv renders the CV at every pull, pdf-compressor
-#   (iLovePDF) shrinks it (APP_COMPRESS_PDF in entrypoint.sh)
+#   (iLovePDF) shrinks it (the CV repo's compress.sh, from APP_BUILD_CMD)
 RUN pip install --no-cache-dir --root-user-action=ignore 'rendercv[full]' pdf-compressor \
     && rendercv --version \
     && pdf-compressor --help >/dev/null

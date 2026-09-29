@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Updates</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="../lm-server/lm-server.css">
+    <link rel="stylesheet" href="updates.css">
+    <script src="../base1/cockpit.js"></script>
+    <script src="updates.js" defer></script>
+</head>
+<body>
+    <!-- #/ : everything at a glance, one button for all of it -->
+    <main id="view-main">
+        <section class="card" id="overview">
+            <header>
+                <h2>Updates</h2>
+                <div class="actions">
+                    <button data-action="check">Check for updates</button>
+                    <button class="primary" data-action="all">Update all</button>
+                </div>
+            </header>
+            <p class="hint" id="checked"></p>
+            <div class="tiles">
+                <div class="tile" id="tile-system"><h3>System image</h3><div class="tile-body"></div></div>
+                <div class="tile" id="tile-containers"><h3>Containers</h3><div class="tile-body"></div></div>
+                <div class="tile" id="tile-config"><h3>Config</h3><div class="tile-body"></div></div>
+            </div>
+
+            <div id="run" hidden>
+                <ol class="steps" id="run-steps"></ol>
+                <div class="progress" id="run-progress" hidden>
+                    <div class="progress-head"><strong class="stage"></strong><span class="amount"></span></div>
+                    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+                    <div class="progress-detail"></div>
+                </div>
+                <details class="run-log"><summary>Log</summary><pre class="log" id="run-log"></pre></details>
+            </div>
+
+            <p class="hint"><em>Update all</em> applies the config from GitHub, updates the containers (only services with a new image restart) and downloads the system image, which switches on the next reboot.</p>
+            <p class="more"><a href="#/details">Show details</a></p>
+        </section>
+    </main>
+
+    <!-- #/details : the full view (deployments, every container, config, history) -->
+    <main id="view-details" hidden>
+        <nav class="breadcrumb"><a href="#/">Updates</a><span aria-hidden="true">›</span><span>Details</span></nav>
+
+        <div class="system-top">
+            <section class="card">
+                <header><h2>System</h2></header>
+                <ul class="sys-status" id="sys-status"><li class="muted">Loading…</li></ul>
+            </section>
+            <section class="card">
+                <header><h2>Image source</h2></header>
+                <dl class="sys-source" id="sys-source"></dl>
+            </section>
+        </div>
+
+        <section class="card" id="system">
+            <header>
+                <h2>Deployments</h2>
+                <div class="actions">
+                    <button data-action="sys-check">Check for updates</button>
+                    <button data-action="sys-download">Download update</button>
+                    <button class="primary" data-action="sys-apply">Update &amp; reboot</button>
+                </div>
+            </header>
+            <div class="progress" id="sys-progress" hidden>
+                <div class="progress-head"><strong class="stage"></strong><span class="amount"></span></div>
+                <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+                <div class="progress-detail"></div>
+            </div>
+            <table class="deployments">
+                <thead><tr><th>Version</th><th>Status</th><th>Built</th><th>Image</th><th></th></tr></thead>
+                <tbody id="sys-deployments"></tbody>
+            </table>
+            <p class="hint">The whole system is one image: an update downloads it and switches on reboot; the previous one stays for rollback. Automatic updates: <code>[updates] system</code> in lm-server.toml.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
+        <section class="card" id="containers">
+            <header>
+                <h2>Containers</h2>
+                <div class="actions">
+                    <button data-action="ctr-check">Check for updates</button>
+                    <button class="primary" data-action="ctr-update">Update containers</button>
+                </div>
+            </header>
+            <table class="deployments containers">
+                <thead><tr><th>Service</th><th>Container</th><th>Running</th><th>Available</th></tr></thead>
+                <tbody id="ctr-rows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+            </table>
+            <p class="hint" id="ctr-hint">Pulls newer images of every service and restarts only what changed. A service that fails to come back is rolled back to its previous image. Automatic updates: <code>[updates] containers</code>.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
+        <section class="card" id="config">
+            <header>
+                <h2>Config (lm-server.toml)</h2>
+                <div class="actions">
+                    <button class="primary" data-action="cfg-sync">Sync configs</button>
+                </div>
+            </header>
+            <dl class="sys-source" id="cfg-info"></dl>
+            <p class="hint">Applies what's on GitHub now; only services whose settings changed restart. Edit the file on the <a href="#" id="to-lm-server">lm-server</a> page. Automatic sync: <code>[updates] config</code>.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
+        <section class="card" id="history">
+            <header>
+                <h2>Automatic runs</h2>
+                <div class="actions">
+                    <button data-action="history">Refresh</button>
+                </div>
+            </header>
+            <p class="hint">Scheduled container updates, system upgrades and config syncs.</p>
+            <pre class="log"></pre>
+        </section>
+    </main>
+</body>
+</html>
