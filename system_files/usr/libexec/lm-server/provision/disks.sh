@@ -36,7 +36,7 @@ count=$(jq length "${ENVDIR}/filebrowser-users.json")
 ((count > 0)) || exit 0
 
 image=$(podman inspect filebrowser --format '{{.ImageName}}' 2>/dev/null ||
-    echo docker.io/gtstef/filebrowser:stable)
+    echo ghcr.io/gtsteffaniak/filebrowser:stable)
 systemctl stop filebrowser.service
 trap 'systemctl start --no-block filebrowser.service' EXIT
 for ((i = 0; i < count; i++)); do
