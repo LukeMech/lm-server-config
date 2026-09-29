@@ -5,4 +5,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/lm-server/provision/%i.sh
+# Done for this config: not run again at boot (see lm-server start-enabled).
+ExecStartPost=/usr/bin/mkdir -p /var/lib/lm-server/provisioned
+ExecStartPost=/usr/bin/touch /var/lib/lm-server/provisioned/%i
 TimeoutStartSec=30min

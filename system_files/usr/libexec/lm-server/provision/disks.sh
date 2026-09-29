@@ -6,29 +6,44 @@ set -euo pipefail
 ENVDIR="${LMS_ENV}/disks"
 ST="${ENVDIR}/syncthing.json"
 
-# --- Syncthing: `syncthing cli` talks to the running instance.
-st() { podman exec syncthing syncthing cli "$@"; }
+# --- Syncthing, over its REST API (the pod publishes it on 127.0.0.1:8384),
+# with the API key from its config.xml -- stable across Syncthing versions,
+# unlike `syncthing cli` inside the container (which has to find the config
+# on its own, and broke with Syncthing 2).
+URL=http://127.0.0.1:8384/rest
+cfg=""
 for _ in $(seq 1 120); do
-    st show system &>/dev/null && break
+    cfg=$(find "${LMS_VOLUMES}/disks/app/syncthing" -name config.xml -print -quit 2>/dev/null || true)
+    [[ -n ${cfg} ]] && curl -fsS -o /dev/null "${URL}/noauth/health" 2>/dev/null && break
     sleep 5
 done
-st config gui user set "$(jq -r .user "${ST}")"
-st config gui password set "$(jq -r .password "${ST}")"
+[[ -n ${cfg} ]] || lms_die "disks: syncthing never wrote its config.xml"
+key=$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "${cfg}" | head -n1)
+[[ -n ${key} ]] || lms_die "disks: no API key in ${cfg}"
+api() { curl -fsS -H "X-API-Key: ${key}" -H 'Content-Type: application/json' "$@"; }
 
-# Folders: added if missing; an existing one (e.g. from a migrated config)
-# gets its path corrected. Sharing them with devices stays in the Syncthing UI.
-existing=$(st config folders list 2>/dev/null || true)
+# GUI login. A plain password is stored hashed by Syncthing itself.
+jq '{user, password}' "${ST}" | api -X PATCH -d @- "${URL}/config/gui" >/dev/null
+
+# Folders: added if missing (Syncthing's defaults + id/label/path); an existing
+# one (e.g. from a migrated config) gets its path corrected. Sharing them with
+# devices stays in the Syncthing UI.
+existing=$(api "${URL}/config/folders" | jq -r '.[] | [.id, .path] | @tsv')
+defaults=$(api "${URL}/config/defaults/folder")
 while IFS=$'\t' read -r id path; do
-    if grep -qxF "${id}" <<<"${existing}"; then
-        [[ $(st config folders "${id}" path get 2>/dev/null) == "${path}" ]] && continue
-        st config folders "${id}" path set "${path}" &&
+    have=$(awk -F'\t' -v id="${id}" '$1 == id { print $2 }' <<<"${existing}")
+    if [[ -n ${have} ]]; then
+        [[ ${have%/} == "${path%/}" ]] && continue
+        jq -n --arg p "${path}" '{path: $p}' | api -X PATCH -d @- "${URL}/config/folders/${id}" >/dev/null &&
             lms_log "disks: syncthing folder ${id} moved to ${path}"
         continue
     fi
-    st config folders add --id "${id}" --label "$(basename "${path}")" --path "${path}" &&
+    jq --arg id "${id}" --arg label "$(basename "${path}")" --arg p "${path}" \
+        '. + {id: $id, label: $label, path: $p}' <<<"${defaults}" |
+        api -X POST -d @- "${URL}/config/folders" >/dev/null &&
         lms_log "disks: syncthing folder ${id} -> ${path} added"
 done < <(jq -r '.folders | to_entries[] | [.key, .value] | @tsv' "${ST}")
-lms_log "disks: syncthing configured"
+lms_log "disks: syncthing configured (GUI login, $(jq '.folders | length' "${ST}") folders)"
 
 # --- FileBrowser: the admin comes from config.yaml; the CLI that adds users
 # needs the database unlocked, so the container is stopped meanwhile.

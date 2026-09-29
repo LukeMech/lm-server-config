@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""lm-server containers [--json]: the image every system container runs and
+"""lm-server containers [--json] [--no-check]: the image every system container runs and
 what `podman auto-update` would update it to.
 
 Containers are the ones systemd runs from the image's quadlets (label
@@ -83,6 +83,8 @@ def remote(image):
 
 def main(argv):
     as_json = "--json" in argv
+    # --no-check: only what runs here (quick, no registry): "update" stays null.
+    check_registry = "--no-check" not in argv
     try:
         items = containers()
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as ex:
@@ -90,10 +92,10 @@ def main(argv):
         return 1
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        check = pool.submit(dry_run)
+        check = pool.submit(dry_run) if check_registry else None
         ids = sorted({c["image_id"] for c in items if c["image_id"]})
         local = dict(zip(ids, pool.map(lambda i: run("podman", "image", "inspect", i, timeout=60), ids)))
-        reports, error = check.result()
+        reports, error = check.result() if check else ({}, "")
 
         for c in items:
             out = local.get(c["image_id"])

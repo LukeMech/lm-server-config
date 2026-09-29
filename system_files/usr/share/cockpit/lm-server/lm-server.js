@@ -123,6 +123,31 @@ function loadContainers() {
         .finally(render);
 }
 
+// Quick refresh without the registries (containers that started, stopped,
+// or got a new image since): the last check's verdict stays for every
+// container still on the same image.
+let ctrRefreshing = false;
+function refreshContainers() {
+    if (ctrRefreshing || busy || !state.ctr) return;
+    ctrRefreshing = true;
+    cockpit.spawn(["/usr/bin/lm-server", "containers", "--json", "--no-check"], root)
+        .then(out => {
+            const prev = Object.fromEntries(state.ctr.map(c => [c.container, c]));
+            state.ctr = JSON.parse(out).map(c => {
+                const old = prev[c.container];
+                return old && old.image_id === c.image_id
+                    ? { ...c, update: old.update, available: old.available, error: old.error }
+                    : c;
+            });
+            renderContainers();
+            renderSummary();
+            publishStatus();
+        })
+        .catch(() => { /* keep what's shown */ })
+        .finally(() => { ctrRefreshing = false; });
+}
+setInterval(() => { if (!cockpit.hidden) refreshContainers(); }, 30000);
+
 function loadConfig() {
     return cockpit.spawn(["/usr/bin/lm-server", "config", "status"], root)
         .then(out => {
@@ -469,6 +494,7 @@ function renderContainers() {
         if (c.update === "pending") avail = `<span class="badge info">Update</span> ${imgText(c.available)}`;
         else if (c.update === "false") avail = `<span class="badge ok">Up to date</span>`;
         else if (c.error) avail = `<span class="badge warn">Unknown</span><span class="sub">${esc(c.error)}</span>`;
+        else if (c.policy) avail = `<span class="badge">Not checked yet</span>`;
         else avail = `<span class="badge">Not auto-updated</span>`;
         const first = c.service !== prev;
         prev = c.service;
