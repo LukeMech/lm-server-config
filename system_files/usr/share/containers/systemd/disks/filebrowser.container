@@ -7,7 +7,7 @@ ContainerName=filebrowser
 Pod=disks.pod
 # FileBrowser Quantum: the official image is on GHCR (filebrowserquantum.com,
 # Getting started > Docker) -- not docker.io, which has no such image.
-Image=ghcr.io/gtsteffaniak/filebrowser:stable
+Image=ghcr.io/gtsteffaniak/filebrowser:latest
 AutoUpdate=registry
 User=0:0
 Environment=FILEBROWSER_CONFIG=/home/filebrowser/config/config.yaml
