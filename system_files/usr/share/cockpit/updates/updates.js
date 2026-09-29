@@ -42,6 +42,7 @@ function setBusy(on) {
     busy = on;
     document.querySelectorAll("button[data-action]").forEach(b => { b.disabled = on; });
 }
+let queuedAll = false; // "Update all" asked for (Overview card) while busy
 async function exclusive(fn) {
     if (busy) return;
     setBusy(true);
@@ -50,6 +51,10 @@ async function exclusive(fn) {
     } finally {
         setBusy(false);
         render();
+        if (queuedAll) {
+            queuedAll = false;
+            setTimeout(() => updateAll(true));
+        }
     }
 }
 
@@ -160,7 +165,38 @@ function sysInfo() {
 const ctrPending = () => (state.ctr || []).filter(c => c.update === "pending");
 const cfgPending = () => state.cfg && state.cfg.REMOTE_REV && state.cfg.REMOTE_REV !== state.cfg.SYNCED_REV;
 
-// Overview page, Health card: one line, a link to this page.
+// Per item, for the Updates card on the Overview page (overview-card.js):
+// { state: ok | info | warn | busy, text }.
+function statusParts() {
+    const s = sysInfo();
+    const err = ex => ({ state: "warn", text: ex.problem === "access-denied" ? "Needs administrative access" : "Check failed" });
+    let system, containers, config;
+    if (state.sysError && !state.sys) system = err(state.sysError);
+    else if (!state.sys) system = { state: "busy", text: "Checking…" };
+    else if (s.staged) system = { state: "info", text: `${version(s.staged.image)} downloaded — reboot to apply` };
+    else if (s.pending || s.downloaded) system = { state: "info", text: `${version(s.pending || s.downloaded.image)} available` };
+    else system = { state: "ok", text: `Up to date (${version(s.booted)})` };
+
+    if (state.ctrError && !state.ctr) containers = err(state.ctrError);
+    else if (!state.ctr) containers = { state: "busy", text: "Checking…" };
+    else if (ctrPending().length) containers = { state: "info", text: `${ctrPending().length} of ${state.ctr.length} have a newer image` };
+    else containers = { state: "ok", text: `All ${state.ctr.length} up to date` };
+
+    if (state.cfgError && !state.cfg) {
+        config = /not configured/.test(state.cfgError.message || "") ? { state: "warn", text: "Not set up yet" } : err(state.cfgError);
+    } else if (!state.cfg) config = { state: "busy", text: "Checking…" };
+    else if (cfgPending()) config = { state: "info", text: `New commit ${shortRev(state.cfg.REMOTE_REV)} on GitHub` };
+    else config = { state: "ok", text: `Up to date (${shortRev(state.cfg.SYNCED_REV)})` };
+
+    // While "Update all" runs, the running step says so.
+    const step = state.run?.steps.find(st => st.state === "running");
+    const parts = { system, containers, config };
+    if (step) parts[step.key] = { state: "busy", text: step.busyText };
+    return { parts, step };
+}
+
+// Overview page, Health card: one line, a link to this page. The Overview's
+// Updates card reads details.parts.
 let lastStatus;
 function publishStatus() {
     let status = null;
@@ -172,7 +208,11 @@ function publishStatus() {
     if (cfgPending()) parts.push("config");
     const known = state.sys || state.ctr || state.cfg;
 
-    if (state.checking && !known) {
+    const { parts: items, step } = statusParts();
+
+    if (step) {
+        status = { title: `Updating: ${step.label.toLowerCase()}…`, details: { pficon: "spinner" } };
+    } else if (state.checking && !known) {
         status = { title: "Checking for updates…", details: { pficon: "spinner" } };
     } else if (s.staged) {
         status = { type: "warning", title: `System update ${version(s.staged.image)} downloaded — reboot to apply`, details: { pficon: "enhancement" } };
@@ -181,6 +221,7 @@ function publishStatus() {
     } else if (known && !state.sysError && !state.ctrError) {
         status = { title: "System, containers and config are up to date", details: { pficon: "check" } };
     }
+    if (status) status.details.parts = items;
     const json = JSON.stringify(status);
     if (json !== lastStatus) {
         lastStatus = json;
@@ -337,8 +378,13 @@ function renderRun() {
             <span class="detail">The new system image applies on the next reboot. <button data-reboot>Reboot now</button></span></li>` : "");
 }
 
-function updateAll() {
-    if (!window.confirm("Apply the config from GitHub, update the containers (services with a new image restart) and download the new system image?")) return;
+// confirmed: already asked (the Overview card's button).
+function updateAll(confirmed) {
+    if (busy && confirmed) {
+        queuedAll = true; // after the check that's running
+        return;
+    }
+    if (!confirmed && !window.confirm("Apply the config from GitHub, update the containers (services with a new image restart) and download the new system image?")) return;
     return exclusive(async () => {
         const log = $("run-log");
         log.textContent = "";
@@ -347,6 +393,7 @@ function updateAll() {
             step.state = "running";
             step.detail = step.busyText;
             renderRun();
+            publishStatus();
             const prog = $("run-progress");
             const onData = step.key === "system" ? progressParser(prog) : undefined;
             if (onData) bar(prog, "Checking…", 0, "", "");
@@ -490,6 +537,12 @@ function view() {
 const loadHistory = () => run(["history", "200"], $("history").querySelector(".log"));
 let historyLoaded = false;
 function onView() {
+    // #/run-all: the Overview card's "Update all" (confirmed there).
+    if (view() === "run-all") {
+        window.location.replace("#/");
+        updateAll(true);
+        return;
+    }
     render();
     if (view() === "details" && !historyLoaded) {
         historyLoaded = true;

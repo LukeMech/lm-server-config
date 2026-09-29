@@ -11,11 +11,11 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
 - **Services**: podman [quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
   baked into the image. Their container images update separately from the system.
 - **Web UI**: Cockpit (`proxmox.lukemech.org` via the tunnel, or `https://<ip>:9090`
-  on the LAN). The **Updates** page shows the system image, every container
-  (the version it runs and the one available) and the config, with one
-  *Update all* button; its status also appears in the Overview page's Health
-  card. *Show details* opens deployments and rollback (with a progress bar from
-  `bootc --progress-fd`), the container table, config sync and the history of
+  on the LAN). The Overview page has an **Updates** card: the system image,
+  containers and config (up to date or what's available), *Update all* and
+  *Show details*. The **Updates** page does the work (each step's status,
+  a progress bar from `bootc --progress-fd`); its details view has
+  deployments and rollback, the container table, config sync and the history of
   automatic runs. The **lm-server** page covers the config editor, status and
   GitHub setup. Stock Cockpit covers containers, VMs, **disks** and network.
 - **Config**: one file, `lm-server.toml`, in the private **lm-server-config-secrets**

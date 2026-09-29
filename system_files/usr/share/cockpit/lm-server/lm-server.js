@@ -132,8 +132,6 @@ configSave.addEventListener("click", () => {
     });
 });
 
-document.getElementById("to-updates").addEventListener("click", () => cockpit.jump("/updates"));
-
 // Setup form placeholders, then the status.
 async function autoRun() {
     setupLoad();
