@@ -48,7 +48,7 @@
                 <thead><tr><th>Service</th><th>State</th><th>CPU</th><th>Memory</th><th>Disk</th></tr></thead>
                 <tbody id="svc-rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
             </table>
-            <p class="hint">All of a service's containers together. CPU: 100% = one core. Limits: <code>cpus</code>, <code>memory</code> and <code>storage</code> (a size) in its section of lm-server.toml; <code>disk</code> = where its data lives. CPU and memory refresh every 10 seconds, disk on <em>Refresh</em>.</p>
+            <p class="hint">All of a service's containers together. CPU: its share of the threads it may use (<code>cpus</code>; without a limit, the whole machine). Limits: <code>cpus</code> (threads), <code>memory</code> and <code>storage</code> (a size) in its section of lm-server.toml; <code>disk</code> = where its data lives. CPU and memory refresh every 10 seconds, disk on <em>Refresh</em>.</p>
             <pre class="log" hidden></pre>
         </section>
         <div class="system-top">

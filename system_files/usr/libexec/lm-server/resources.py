@@ -139,6 +139,7 @@ def main(argv):
                           for u in us for x in [u + ".service", *members.get(u + ".service", [])]},
                 "cpu_percent": None if cpu is None else round(cpu, 1),  # 100 = one core
                 "cpu_limit": seconds(a.get("CPUQuotaPerSecUSec")),       # cores
+                "host_cpus": os.cpu_count(),
                 "memory": number(a.get("MemoryCurrent")),
                 "memory_limit": number(a.get("MemoryMax")),
                 "tasks": number(a.get("TasksCurrent")),
@@ -163,11 +164,11 @@ def main(argv):
         states = set(r["units"].values())
         state = "active" if states == {"active"} else ("-" if not r["enabled"] else ",".join(sorted(states)))
         cpu = "-" if r["cpu_percent"] is None else f"{r['cpu_percent']:.0f}%"
-        lim = "-" if r["cpu_limit"] is None else f"{r['cpu_limit'] * 100:.0f}%"
+        lim = "-" if r["cpu_limit"] is None else f"{r['cpu_limit']:g} thr"
         d = r["disk"]
         print(f"{r['service']:<12} {state:<10} {cpu:>7} {lim:>6}  {iec(r['memory']):>7} {iec(r['memory_limit']):>7}"
               f"  {iec(d['used']):>7} {iec(d['size']):>7}")
-    print("\nCPU: 100% = one core. Limits: cpus / memory / storage in lm-server.toml.")
+    print("\nCPU: 100% = one thread busy; LIMIT = cpus (threads). Limits: cpus / memory / storage in lm-server.toml.")
     return 0
 
 

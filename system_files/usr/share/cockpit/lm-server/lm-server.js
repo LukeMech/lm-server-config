@@ -549,8 +549,14 @@ function renderResources() {
             badge = `<span class="badge warn">${label}</span><span class="sub">${esc(down.map(([u, s]) => `${u}: ${s}`).join(", "))}</span>`;
         }
 
-        const cpu = r.cpu_percent == null ? "—" : `${r.cpu_percent.toFixed(r.cpu_percent < 10 ? 1 : 0)}%`;
-        const cpuLim = r.cpu_limit ? r.cpu_limit * 100 : null;
+        // CPU as a share of what it may use: its `cpus` (threads), or the
+        // whole machine without a limit. (systemd counts 100% per thread.)
+        const cores = r.cpu_limit || r.host_cpus || null;
+        const cpuShare = r.cpu_percent == null || !cores ? null : r.cpu_percent / (cores * 100);
+        const pct = x => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
+        const threads = n => `${+n.toFixed(1)} ${n === 1 ? "thread" : "threads"}`;
+        const cpuText = cpuShare == null ? "—"
+            : `${pct(cpuShare)} of ${r.cpu_limit ? threads(r.cpu_limit) : `all ${threads(cores)}`}`;
         const mem = r.memory_limit ? `${iec(r.memory)} / ${iec(r.memory_limit)}` : iec(r.memory);
         const d = r.disk;
         const diskText = d.size ? `${iec(d.used)} / ${iec(d.size)}` : d.error ? esc(d.error) : iec(d.used);
@@ -558,7 +564,7 @@ function renderResources() {
         return `<tr>
             <td><strong>${esc(r.service)}</strong><span class="sub">${esc(r.description)}${r.builtin ? " · part of the system image, not a container" : ""}</span></td>
             <td>${badge}</td>
-            <td>${meter(cpuLim ? `${cpu} of ${Math.round(cpuLim)}%` : cpu, cpuLim && r.cpu_percent != null ? r.cpu_percent / cpuLim : null, r.enabled && !cpuLim ? "no limit" : "")}</td>
+            <td>${meter(cpuText, r.cpu_limit ? cpuShare : null, r.enabled && !r.cpu_limit ? "no limit" : "")}</td>
             <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null, r.enabled && !r.memory_limit ? "no limit" : "")}</td>
             <td>${meter(diskText, d.size && d.used != null ? d.used / d.size : null, diskSub)}</td></tr>`;
     }).join("") || `<tr><td colspan="5" class="muted">No services.</td></tr>`;
