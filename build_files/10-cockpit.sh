@@ -2,14 +2,16 @@
 # Web UI replacing the Proxmox GUI: the Management page (system image,
 # container and config updates, config editor, setup), containers
 # (cockpit-podman), VMs (cockpit-machines), disks/RAID/mounts
-# (cockpit-storaged), network, metrics history (cockpit-pcp).
+# (cockpit-storaged), network, metrics history (pcp + python3-pcp: the
+# cockpit-pcp package is gone, Cockpit reads PCP through python3-pcp now).
 set -ouex pipefail
 
 dnf5 -y install \
     cockpit-files \
     cockpit-machines \
     cockpit-networkmanager \
-    cockpit-pcp \
+    pcp \
+    python3-pcp \
     cockpit-podman \
     cockpit-selinux \
     cockpit-storaged \
