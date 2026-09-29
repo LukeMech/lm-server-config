@@ -117,6 +117,9 @@ def main(argv):
                 "service": name,
                 "description": desc,
                 "enabled": os.path.exists(f"{STATE}/env/{name}/enabled"),
+                # Not a container: a program of the system image with its own
+                # unit (cloudflared) -- updated with the image, not by podman.
+                "builtin": all(u.startswith("lm-server-") for u in us),
                 "units": {u: after.get(u + ".service", {}).get("ActiveState", "unknown") for u in us},
                 "cpu_percent": None if cpu is None else round(cpu, 1),  # 100 = one core
                 "cpu_limit": seconds(a.get("CPUQuotaPerSecUSec")),       # cores

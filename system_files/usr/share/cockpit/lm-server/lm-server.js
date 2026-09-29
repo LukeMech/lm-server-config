@@ -551,10 +551,10 @@ function renderResources() {
         const diskText = d.size ? `${iec(d.used)} / ${iec(d.size)}` : d.error ? esc(d.error) : iec(d.used);
         const diskSub = { image: "own filesystem", storage: esc(d.folder), system: "system disk" }[d.kind];
         return `<tr>
-            <td><strong>${esc(r.service)}</strong><span class="sub">${esc(r.description)}</span></td>
+            <td><strong>${esc(r.service)}</strong><span class="sub">${esc(r.description)}${r.builtin ? " · part of the system image, not a container" : ""}</span></td>
             <td>${badge}</td>
-            <td>${meter(cpuLim ? `${cpu} of ${Math.round(cpuLim)}%` : cpu, cpuLim && r.cpu_percent != null ? r.cpu_percent / cpuLim : null)}</td>
-            <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null)}</td>
+            <td>${meter(cpuLim ? `${cpu} of ${Math.round(cpuLim)}%` : cpu, cpuLim && r.cpu_percent != null ? r.cpu_percent / cpuLim : null, r.enabled && !cpuLim ? "no limit" : "")}</td>
+            <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null, r.enabled && !r.memory_limit ? "no limit" : "")}</td>
             <td>${meter(diskText, d.size && d.used != null ? d.used / d.size : null, diskSub)}</td></tr>`;
     }).join("") || `<tr><td colspan="5" class="muted">No services.</td></tr>`;
     // Widths set here, not in the markup (Cockpit's CSP: no inline styles).

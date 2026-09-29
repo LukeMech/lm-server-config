@@ -309,13 +309,14 @@ cmd_sync() {
     rm -rf "${LMS_ENV}/host"
     mv "${new}/host" "${LMS_ENV}/host"
     # What changed (host settings, services apply_service stopped or
-    # restarted), for the summary below.
-    SYNC_CHANGED=()
+    # restarted), for the summary below -- a file, since every service is
+    # applied in a subshell of its own.
+    SYNC_CHANGED_FILE=$(mktemp /run/lm-server-changed.XXXXXX)
     local host_changed item
     host_changed=$("${LMS_LIBEXEC}/apply-host.sh") || lms_log "warning: host settings not fully applied"
-    for item in ${host_changed}; do SYNC_CHANGED+=("host/${item}"); done
+    for item in ${host_changed}; do sync_changed "host/${item}"; done
 
-    local svc skipped=()
+    local svc rc skipped=() failed=()
     for svc in $(lms_services); do
         if [[ -f ${new}/.errors/${svc} ]]; then
             if lms_enabled "${svc}"; then
@@ -326,26 +327,50 @@ cmd_sync() {
             skipped+=("${svc}")
             continue
         fi
-        apply_service "${svc}" "${new}/${svc}" "${force}"
+        # One service failing (a copy that breaks off, a disk that won't
+        # mount) must not stop the others: each in a subshell, which set -e
+        # ends at its first error. (Not in an `if`: that would switch set -e
+        # off inside.)
+        set +e
+        (
+            set -e
+            apply_service "${svc}" "${new}/${svc}" "${force}"
+        )
+        rc=$?
+        set -e
+        case ${rc} in
+        0) ;;
+        10) skipped+=("${svc}") ;; # its disk/storage can't be set up (logged)
+        *)
+            lms_log "${svc}: error while applying (exit ${rc}, see above) -- the other services go on"
+            failed+=("${svc}")
+            ;;
+        esac
     done
     rm -rf "${new}"
+    local -a changed=()
+    mapfile -t changed <"${SYNC_CHANGED_FILE}"
+    rm -f "${SYNC_CHANGED_FILE}"
 
     git -C "${LMS_REPO_DIR}" rev-parse HEAD >"${LMS_STATE}/config.rev"
     date -Is >"${LMS_STATE}/config.synced"
     local rev
     rev=$(git -C "${LMS_REPO_DIR}" rev-parse --short HEAD)
-    if ((${#SYNC_CHANGED[@]})); then
-        lms_log "synced ${rev} ($(secrets_config_path)) -- changed: ${SYNC_CHANGED[*]}"
+    if ((${#changed[@]})); then
+        lms_log "synced ${rev} ($(secrets_config_path)) -- changed: ${changed[*]}"
     else
         lms_log "synced ${rev} ($(secrets_config_path)) -- no changes, nothing restarted"
     fi
-    # 3 = synced, but these services are unavailable until their section is fixed.
+    # 3 = synced, but these services are unavailable until fixed.
+    ((${#failed[@]} == 0)) || lms_log "warning: failed ${failed[*]} -- see above; the next sync tries again"
     if ((${#skipped[@]})); then
-        lms_log "warning: skipped ${skipped[*]} -- fix lm-server.toml, then: lm-server config pull"
-        return 3
+        lms_log "warning: skipped ${skipped[*]} -- fix lm-server.toml (or the disk), then: lm-server config pull"
     fi
+    ((${#skipped[@]} + ${#failed[@]} == 0)) || return 3
     return 0
 }
+
+sync_changed() { echo "$1" >>"${SYNC_CHANGED_FILE}"; }
 
 # apply_service <svc> <rendered-dir> <force>: swaps in the new config and
 # (re)starts the service only if its rendered files changed.
@@ -359,7 +384,7 @@ apply_service() {
             lms_log "${svc}: removed from ${LMS_CONFIG_FILE} -- stopping"
             systemctl stop "${units[@]}" || true
             rm -f "${dst}/enabled"
-            SYNC_CHANGED+=("${svc}")
+            sync_changed "${svc}"
         fi
         return 0
     fi
@@ -367,13 +392,15 @@ apply_service() {
         return 0
     fi
 
+    # Exit 10 = its disk/storage can't be set up (logged): nothing applied,
+    # it keeps running as it was (or stays off); the next sync tries again.
     apply_storage "${svc}" "${src}"
     apply_limits "${svc}" "${src}"
     rm -rf "${dst}"
     mv "${src}" "${dst}"
     touch "${dst}/enabled"
     lms_log "${svc}: config applied -- (re)starting"
-    SYNC_CHANGED+=("${svc}")
+    sync_changed "${svc}"
     systemctl reset-failed "${units[@]}" 2>/dev/null || true
     systemctl restart --no-block "${units[@]}"
     if [[ -x ${LMS_LIBEXEC}/provision/${svc}.sh ]]; then
@@ -412,13 +439,13 @@ apply_storage() {
             local need
             need=$(du -sxb "${vol}" 2>/dev/null | cut -f1)
             if ((${need:-0} > $(numfmt --from=iec "${size}") * 9 / 10)); then
-                lms_log "${svc}: error: its data ($(numfmt --to=iec "${need}")) doesn't fit in storage = \"${size}\" -- data location unchanged"
-                return 0
+                lms_log "${svc}: error: its data ($(numfmt --to=iec "${need}")) doesn't fit in storage = \"${size}\" -- not applied"
+                return 10
             fi
             # ...and a new image needs that much free space where it goes
             # (the disk folder -- or the system disk, if nothing is mounted there).
             if [[ ! -e ${want} ]] && ! disk_space_for "${svc}" "${want}" "$(numfmt --from=iec "${size}")"; then
-                return 0
+                return 10
             fi
         fi
         lms_log "${svc}: data location ${cur:-system disk} -> ${want:-system disk}${size:+ (${size} of its own)}"
@@ -532,7 +559,7 @@ disk_space_for() {
     free=$(df -B1 --output=avail "${probe:-/}" | tail -n1)
     free=${free// /}
     if ((free < $3)); then
-        lms_log "$1: error: $(numfmt --to=iec "$3") needed for its storage, but only $(numfmt --to=iec "${free}") free in ${probe:-/} -- nothing changed"
+        lms_log "$1: error: $(numfmt --to=iec "$3") needed for its storage, but only $(numfmt --to=iec "${free}") free in ${probe:-/} -- not applied"
         return 1
     fi
 }
