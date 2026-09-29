@@ -31,4 +31,6 @@ systemctl disable bootc-fetch-apply-updates.timer || true
 firewall-offline-cmd --add-service=ssh
 firewall-offline-cmd --add-service=cockpit
 firewall-offline-cmd --add-service=syncthing
+# Immich on the LAN (immich.pod publishes it on every address).
+firewall-offline-cmd --add-port=2283/tcp
 systemctl enable firewalld.service

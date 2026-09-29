@@ -67,7 +67,8 @@ prints the same table.
 **Isolation**:
 - Every service has its own podman network.
 - Web UIs are published on 127.0.0.1 only (reached through cloudflared). The LAN
-  only gets SSH, Cockpit and the Syncthing sync ports.
+  only gets SSH, Cockpit, the Syncthing sync ports and Immich
+  (`http://<server-ip>:2283`, e.g. for the mobile app at home).
 - SELinux labels every volume `:Z`. The shared data disk is `:z`.
 - `NoNewPrivileges` on everything.
 - The web apps also run with `UserNS=auto`, a read-only root filesystem and no
