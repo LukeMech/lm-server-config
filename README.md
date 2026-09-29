@@ -11,9 +11,9 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
 - **Services**: podman [quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
   baked into the image. Their container images update separately from the system.
 - **Web UI**: Cockpit (`proxmox.lukemech.org` via the tunnel, or `https://<ip>:9090`
-  on the LAN). The **lm-server** page covers container updates with a live log,
-  the history of automatic runs, config sync, and GitHub setup. System image
-  updates and rollback are Cockpit's **Software updates** page (cockpit-ostree).
+  on the LAN). The **lm-server** page covers system updates (deployments,
+  rollback, a progress bar from `bootc --progress-fd`) and container updates
+  with a live log, the history of automatic runs, config sync, and GitHub setup.
   Stock Cockpit covers containers, VMs, **disks** and network.
 - **Config**: one file, `lm-server.toml`, in the private **lm-server-config-secrets**
   repo. At first boot the server asks for GitHub credentials to fetch it.
@@ -78,7 +78,7 @@ every boot, which includes every system upgrade. Turn this off with
 
 | What | How | When |
 |---|---|---|
-| System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit *Software updates* | `[updates] system`, default `"manual"` |
+| System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
 | Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), Cockpit | `[updates] containers`, default `"daily"` |
 | Configs (lm-server.toml) | `lm-server config pull` (= `sync`), Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
 

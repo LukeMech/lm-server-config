@@ -8,6 +8,8 @@
 #   APP_PORT             listen port (required)
 #   APP_GITHUB_TOKEN     token for private repos (+ APP_GITHUB_USER)
 #   APP_BUILD_CMD        run after every pull (e.g. rendercv render ...)
+#   APP_COMPRESS_PDF     PDFs (space-separated) to compress after the build,
+#                        with pdf-compressor; needs ILOVEPDF_PUBLIC_KEY
 #   APP_WORKERS          gunicorn workers, default 2
 #   APP_UPDATE_INTERVAL  seconds between pulls, default 180
 #
@@ -60,6 +62,38 @@ if [[ -d translations ]]; then
 fi
 if [[ -n ${APP_BUILD_CMD:-} ]]; then
     bash -c "${APP_BUILD_CMD}"
+fi
+
+# Built PDFs through iLovePDF (pdf-compressor, key in ILOVEPDF_PUBLIC_KEY).
+# Cached by the hash of the uncompressed file: a restart that renders the
+# same PDF again doesn't use up the monthly quota. Any failure -> the
+# uncompressed PDF is served.
+compress_pdf() {
+    local pdf=$1 cache=/data/.pdf-cache key
+    [[ -f ${pdf} ]] || {
+        echo "webapp: ${pdf} not found -- nothing to compress" >&2
+        return
+    }
+    mkdir -p "${cache}"
+    key=$(sha256sum "${pdf}" | cut -d' ' -f1)
+    if [[ -f ${cache}/${key}.pdf ]]; then
+        cp -f "${cache}/${key}.pdf" "${pdf}"
+        echo "webapp: ${pdf}: compressed copy from cache"
+        return
+    fi
+    if pdf-compressor --inplace --min-size-reduction 0 "${pdf}"; then
+        find "${cache}" -name '*.pdf' -mtime +30 -delete
+        cp -f "${pdf}" "${cache}/${key}.pdf"
+    else
+        echo "webapp: compressing ${pdf} failed -- serving it uncompressed" >&2
+    fi
+}
+if [[ -n ${APP_COMPRESS_PDF:-} ]]; then
+    if [[ -z ${ILOVEPDF_PUBLIC_KEY:-} ]]; then
+        echo "webapp: no ilovepdf_public_key in the config -- PDFs not compressed" >&2
+    else
+        for pdf in ${APP_COMPRESS_PDF}; do compress_pdf "${pdf}"; done
+    fi
 fi
 
 python3 -m gunicorn --bind "0.0.0.0:${APP_PORT}" --workers "${APP_WORKERS}" \

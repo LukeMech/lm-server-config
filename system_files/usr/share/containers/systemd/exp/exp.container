@@ -4,6 +4,7 @@
 # lm-server: env APP_MODULE=server:app
 # lm-server: env APP_PORT=7999
 # lm-server: env APP_BUILD_CMD=rendercv render Łukasz_Błaszczyk_CV_EN.yaml
+# lm-server: env APP_COMPRESS_PDF=en/Łukasz_Błaszczyk_CV.pdf
 # lm-server: env APP_GITHUB_TOKEN={{github_token}}
 # lm-server: env APP_GITHUB_USER={{github_user}}
 [Unit]

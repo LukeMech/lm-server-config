@@ -70,6 +70,9 @@ syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 [toolbox]
 [website]
 [exp]
+# CV PDF compressed through iLovePDF (developer.ilovepdf.com, free plan);
+# leave it out to serve it uncompressed.
+# ilovepdf_public_key = "project_public_..."
 
 [convert]
 jwt_secret = "CHANGE_ME"

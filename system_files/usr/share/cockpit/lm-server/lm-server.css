@@ -7,6 +7,8 @@
     --accent: #0066cc;
     --accent-text: #ffffff;
     --code: #f0f0f0;
+    --ok: #3e8635;
+    --warn: #b98412;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,6 +21,8 @@
         --accent: #3d8fe0;
         --accent-text: #ffffff;
         --code: #1b1d21;
+        --ok: #5ba352;
+        --warn: #f0ab00;
     }
 }
 
@@ -136,21 +140,99 @@ pre.log.failed {
     outline: 2px solid #c9190b;
 }
 
-textarea#config-text {
-    display: block;
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 420px;
-    margin-top: 12px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--code);
-    color: var(--text);
-    font: 13px/1.45 "Red Hat Mono", ui-monospace, monospace;
-    tab-size: 4;
-    resize: vertical;
+/* ---- System image: status + source cards, deployments, progress bar */
+.system-top {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
 }
+
+.muted {
+    color: var(--muted);
+}
+
+.sys-status {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: grid;
+    gap: 6px;
+}
+
+.sys-status .ok { color: var(--ok); }
+.sys-status .info { color: var(--text); }
+.sys-status .warn { color: var(--warn); }
+.sys-status button { margin-left: 8px; padding: 2px 10px; }
+
+.sys-source {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 24px;
+    margin: 12px 0 0;
+}
+
+.sys-source dt { font-weight: 600; }
+.sys-source dd { margin: 0; overflow-wrap: anywhere; }
+
+.progress {
+    margin-top: 12px;
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bar {
+    height: 8px;
+    margin: 6px 0 4px;
+    border-radius: 4px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.bar .fill {
+    width: 0;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+}
+
+.progress-detail {
+    color: var(--muted);
+    font-size: 13px;
+    min-height: 1.5em;
+}
+
+table.deployments {
+    width: 100%;
+    margin-top: 12px;
+    border-collapse: collapse;
+}
+
+table.deployments th,
+table.deployments td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+table.deployments th { font-weight: 600; }
+table.deployments .row-actions { text-align: right; }
+
+.badge {
+    display: inline-block;
+    padding: 1px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+}
+
+.badge.ok { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.badge.info { border-color: var(--accent); color: var(--accent); }
+.badge.warn { border-color: var(--warn); color: var(--warn); }
 
 textarea#config-text {
     display: block;

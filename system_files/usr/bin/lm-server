@@ -14,6 +14,7 @@ System (bootc image from ghcr.io/lukemech/lm-server)
   history [N]            last N lines of automatic updates/syncs
   upgrade [--check]      download the next system image (applied on reboot)
   upgrade --apply        download it and reboot into it now
+  upgrade --progress ... the same, plus progress as JSON lines (Cockpit page)
   rollback               boot the previous system image on next reboot
 
 Containers (updated independently of the system)
@@ -585,11 +586,18 @@ cmd_history() {
         -u podman-auto-update.service -u lm-server-upgrade.service -u lm-server-sync.service
 }
 
+# --progress: bootc's progress events (JSON Lines, one object per line) on
+# stdout, next to its normal output -- the Cockpit page draws a bar from them.
 cmd_upgrade() {
+    local progress=()
+    if [[ ${1:-} == --progress ]]; then
+        progress=(--progress-fd 3)
+        shift
+    fi
     case ${1:-} in
     --check) bootc upgrade --check ;;
-    --apply) bootc upgrade --apply ;;
-    "") bootc upgrade && echo "Staged -- reboot (or run: lm-server upgrade --apply) to switch to it." ;;
+    --apply) bootc upgrade "${progress[@]}" --apply 3>&1 ;;
+    "") bootc upgrade "${progress[@]}" 3>&1 && echo "Staged -- reboot (or run: lm-server upgrade --apply) to switch to it." ;;
     *) lms_die "upgrade: unknown argument $1" ;;
     esac
 }

@@ -10,6 +10,39 @@
 </head>
 <body>
     <main>
+        <div class="system-top">
+            <section class="card">
+                <header><h2>System</h2></header>
+                <ul class="sys-status" id="sys-status"><li class="muted">Loading…</li></ul>
+            </section>
+            <section class="card">
+                <header><h2>Image source</h2></header>
+                <dl class="sys-source" id="sys-source"></dl>
+            </section>
+        </div>
+
+        <section class="card" data-log id="system">
+            <header>
+                <h2>Deployments and updates</h2>
+                <div class="actions">
+                    <button id="sys-check">Check for updates</button>
+                    <button id="sys-download">Download update</button>
+                    <button class="primary" id="sys-apply">Update &amp; reboot</button>
+                </div>
+            </header>
+            <div class="progress" id="sys-progress" hidden>
+                <div class="progress-head"><strong id="sys-stage"></strong><span id="sys-amount"></span></div>
+                <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="sys-fill"></div></div>
+                <div class="progress-detail" id="sys-detail"></div>
+            </div>
+            <table class="deployments">
+                <thead><tr><th>Version</th><th>Status</th><th>Built</th><th>Image</th><th></th></tr></thead>
+                <tbody id="sys-deployments"></tbody>
+            </table>
+            <p class="hint">The whole system is one image: an update downloads it and switches on reboot; the previous one stays for rollback. Automatic updates: <code>[updates] system</code> in lm-server.toml.</p>
+            <pre class="log" hidden></pre>
+        </section>
+
         <section class="card" data-log>
             <header>
                 <h2>Containers</h2>
