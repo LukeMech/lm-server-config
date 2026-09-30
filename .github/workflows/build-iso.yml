@@ -46,7 +46,7 @@ jobs:
 
       - name: Build ISO
         id: build
-        uses: osbuild/bootc-image-builder-action@486ce86198c7d7e123a19dd239525562c4f520d0 # main
+        uses: osbuild/bootc-image-builder-action@028e4d28330efe546229eb9cb52aee78174d2347 # main
         with:
           config-file: ./disk_config/iso.toml
           image: ${{ env.IMAGE }}
