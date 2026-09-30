@@ -19,11 +19,17 @@ RUN microdnf -y install --setopt=install_weak_deps=0 --nodocs \
 # Emoji (flags too) in the rendercv CV: Typst picks up system fonts. The
 # COLRv1 font (vector glyphs) from the upstream noto-emoji release -- EL's
 # google-noto-color-emoji-fonts has only the bitmap (CBDT) one, which Typst
-# embeds as images (much bigger, blurry PDFs).
-ADD --chmod=0644 \
-    --checksum=sha256:0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2 \
-    https://github.com/googlefonts/noto-emoji/raw/v2.051/fonts/Noto-COLRv1.ttf \
-    /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf
+# embeds as images (much bigger, blurry PDFs). Fetched and checksum-verified
+# with python3 (no curl in the image; the CI's podman has no ADD --checksum).
+ARG NOTO_EMOJI_URL=https://github.com/googlefonts/noto-emoji/raw/v2.051/fonts/Noto-COLRv1.ttf
+ARG NOTO_EMOJI_SHA256=0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2
+RUN mkdir -p /usr/share/fonts/noto-emoji \
+    && python3 -c 'import hashlib, sys, urllib.request; \
+data = urllib.request.urlopen(sys.argv[1]).read(); \
+sys.exit(f"checksum mismatch: {sys.argv[1]}") if hashlib.sha256(data).hexdigest() != sys.argv[2] else None; \
+open(sys.argv[3], "wb").write(data)' \
+        "${NOTO_EMOJI_URL}" "${NOTO_EMOJI_SHA256}" /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf \
+    && chmod 0644 /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf
 
 # Everything the sites need, in one venv -- one image for all of them,
 # nothing is installed per site at start (requirements.txt says what each
