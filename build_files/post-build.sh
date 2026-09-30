@@ -43,14 +43,8 @@ REMOVE=(
     WALinuxAgent-udev
     NetworkManager-cloud-setup
     cloud-utils-growpart
-    # LUKS unlocked by TPM: no LUKS here.
-    clevis
-    clevis-dracut
-    clevis-luks
-    clevis-pin-tpm2
-    clevis-systemd
-    luksmeta
-    jose
+    # (clevis, LUKS unlocked by TPM, stays: almalinux-bootc's dracut config
+    # adds its module, so the initramfs rebuild below fails without it.)
     # Desktop / NFS leftovers, the legacy iptables service (firewalld uses
     # nftables). os-prober stays: grub2-tools requires it.
     toolbox
