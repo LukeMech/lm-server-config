@@ -50,8 +50,9 @@ jobs:
         with:
           config-file: ./disk_config/iso.toml
           image: ${{ env.IMAGE }}
+          # No --use-librepo: with AlmaLinux's repos every installer package
+          # download fails through librepo; the default (curl) works.
           types: anaconda-iso
-          additional-args: --use-librepo=True
 
       # GitHub release assets are capped at 2 GiB: a bigger ISO is split into
       # parts (join with `cat lm-server-*.iso.part-* > lm-server.iso`).
