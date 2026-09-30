@@ -43,8 +43,8 @@ jobs:
     steps:
       # Same as Bluefin/Bazzite: the installer container, the payload and
       # the ISO (which holds both) don't fit on the stock runner's disk.
-      - name: Maximize build space
-        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6 # v10
+      # - name: Maximize build space
+      #   uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6 # v10
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
