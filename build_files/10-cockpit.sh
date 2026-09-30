@@ -7,7 +7,10 @@
 #
 # Network, SELinux and the performance profile (tuned) pages are part of
 # cockpit-system on EL (it provides cockpit-networkmanager, cockpit-selinux,
-# cockpit-tuned).
+# cockpit-tuned), so is Kernel dump (kdump: 25-kdump.sh).
+#
+# setroubleshoot: Cockpit > SELinux lists access denials, with an
+# explanation and the suggested fix.
 set -ouex pipefail
 
 dnf -y install \
@@ -18,7 +21,9 @@ dnf -y install \
     cockpit-podman \
     cockpit-storaged \
     cockpit-system \
-    cockpit-ws
+    cockpit-ws \
+    setroubleshoot-plugins \
+    setroubleshoot-server
 
 # No per-package "Software updates" page: the system is updated as a whole
 # image from the Management page. The overrides in /etc/cockpit/ also hide it

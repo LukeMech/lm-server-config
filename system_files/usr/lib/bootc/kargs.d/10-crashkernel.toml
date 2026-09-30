@@ -1,0 +1,6 @@
+# Memory reserved for the kdump crash kernel (build_files/25-kdump.sh),
+# RHEL's default scale: 192M on 1-4G of RAM, 256M on 4-64G, 512M above.
+# bootc applies it on install and when an upgrade changes it; it takes
+# effect at the next boot.
+# https://bootc.dev/bootc/building/kernel-arguments.html
+kargs = ["crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M"]
