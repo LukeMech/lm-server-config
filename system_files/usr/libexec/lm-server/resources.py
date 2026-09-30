@@ -4,10 +4,19 @@ what it uses now.
 
 CPU and memory are those of lm-server-<svc>.slice (all of the service's
 containers together; limits = `cpus` / `memory` in lm-server.toml). CPU is
-measured over one second. Disk is its data folder, volumes/<svc>: used and
+measured over one second. Memory is what the service really holds (its
+cgroup's memory.current minus inactive_file, the cache the kernel drops first
+-- like `docker stats`); memory_cache is its whole page cache, reclaimed as
+needed. Disk is its data folder, volumes/<svc>: used and
 size when it's a filesystem of its own (`storage = "80G"`, or a `disk` folder
 that is a mount), else only what's used (du -- slow on big folders;
 --no-disk skips those).
+
+Also the whole machine ("host"): CPU busy over the same second, RAM used
+(MemTotal - MemAvailable, as Cockpit's overview), the sum of the services'
+limits, and the read/write rate of every disk and RAID array.
+
+--json: {"host": {...}, "services": [...]}.
 """
 import json
 import os
@@ -17,7 +26,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 STATE = "/var/lib/lm-server"
-PROPS = "Id,ActiveState,MemoryCurrent,MemoryMax,CPUUsageNSec,CPUQuotaPerSecUSec,TasksCurrent"
+PROPS = "Id,ActiveState,MemoryCurrent,MemoryMax,CPUUsageNSec,CPUQuotaPerSecUSec,TasksCurrent,ControlGroup"
 
 
 def run(*cmd, timeout=60):
@@ -62,6 +71,63 @@ def seconds(v):
         num = part.rstrip("abcdefghijklmnopqrstuvwxyz")
         total += float(num) * units.get(part[len(num):] or "s", 1)
     return total
+
+
+def memory_stat(cgroup):
+    """A cgroup's memory.stat: {key: bytes}."""
+    try:
+        with open(f"/sys/fs/cgroup{cgroup}/memory.stat") as f:
+            return {k: int(v) for k, v in (l.split() for l in f)}
+    except (OSError, ValueError):
+        return {}
+
+
+def cpu_times():
+    """/proc/stat: (busy, total) jiffies of all CPUs."""
+    with open("/proc/stat") as f:
+        v = [int(x) for x in f.readline().split()[1:]]
+    idle = v[3] + (v[4] if len(v) > 4 else 0)  # idle + iowait
+    total = sum(v[:8])  # without guest time (already in user/nice)
+    return total - idle, total
+
+
+def meminfo():
+    info = {}
+    with open("/proc/meminfo") as f:
+        for line in f:
+            k, _, v = line.partition(":")
+            info[k] = int(v.split()[0]) * 1024
+    return info
+
+
+def block_devices():
+    """Whole disks and RAID arrays (no partitions, loop, zram, LVM): {name: label}."""
+    devs = {}
+    for name in sorted(os.listdir("/sys/block")):
+        base = f"/sys/block/{name}"
+        if os.path.exists(f"{base}/device"):
+            try:
+                with open(f"{base}/device/model") as f:
+                    devs[name] = f.read().strip()
+            except OSError:
+                devs[name] = ""
+        elif os.path.isdir(f"{base}/md"):
+            try:
+                with open(f"{base}/md/level") as f:
+                    devs[name] = f.read().strip().upper()
+            except OSError:
+                devs[name] = "RAID"
+    return devs
+
+
+def diskstats():
+    """/proc/diskstats: {name: (bytes read, bytes written)} (sectors are 512 B)."""
+    out = {}
+    with open("/proc/diskstats") as f:
+        for line in f:
+            v = line.split()
+            out[v[2]] = (int(v[5]) * 512, int(v[9]) * 512)
+    return out
 
 
 def disk(svc, with_du):
@@ -116,9 +182,11 @@ def main(argv):
     with ThreadPoolExecutor(max_workers=6) as pool:
         disks = {name: pool.submit(disk, name, with_du) for name, _, _ in services}
         before = show(slices)
+        cpu0, io0 = cpu_times(), diskstats()
         t0 = time.monotonic()
         time.sleep(1)
         after = show(slices + units + sorted({m for ms in members.values() for m in ms}))
+        cpu1, io1 = cpu_times(), diskstats()
         dt = time.monotonic() - t0
 
         result = []
@@ -128,6 +196,9 @@ def main(argv):
             cpu = None
             if number(a.get("CPUUsageNSec")) is not None and number(b.get("CPUUsageNSec")) is not None:
                 cpu = (number(a["CPUUsageNSec"]) - number(b["CPUUsageNSec"])) / 1e9 / dt * 100
+            current = number(a.get("MemoryCurrent"))
+            stat = memory_stat(a.get("ControlGroup", "")) if current is not None else {}
+            memory = None if current is None else max(0, current - stat.get("inactive_file", 0))
             result.append({
                 "service": name,
                 "description": desc,
@@ -140,14 +211,33 @@ def main(argv):
                 "cpu_percent": None if cpu is None else round(cpu, 1),  # 100 = one core
                 "cpu_limit": seconds(a.get("CPUQuotaPerSecUSec")),       # cores
                 "host_cpus": os.cpu_count(),
-                "memory": number(a.get("MemoryCurrent")),
+                "memory": memory,
+                "memory_cache": stat.get("file"),
                 "memory_limit": number(a.get("MemoryMax")),
                 "tasks": number(a.get("TasksCurrent")),
                 "disk": disks[name].result(),
             })
 
+    busy, ticks = cpu1[0] - cpu0[0], cpu1[1] - cpu0[1]
+    mem = meminfo()
+    enabled = [r for r in result if r["enabled"]]
+
+    def rate(name, i):
+        return round((io1[name][i] - io0[name][i]) / dt) if name in io0 and name in io1 else None
+
+    host = {
+        "cpus": os.cpu_count(),
+        "cpu_percent": round(busy / ticks * 100, 1) if ticks > 0 else None,  # 100 = all threads
+        "cpu_limits": sum(r["cpu_limit"] or 0 for r in enabled),
+        "memory_total": mem.get("MemTotal"),
+        "memory_used": mem.get("MemTotal", 0) - mem.get("MemAvailable", 0),
+        "memory_limits": sum(r["memory_limit"] or 0 for r in enabled),
+        "disks": [{"name": name, "label": label, "read": rate(name, 0), "write": rate(name, 1)}
+                  for name, label in block_devices().items()],
+    }
+
     if as_json:
-        json.dump(result, sys.stdout, indent=1)
+        json.dump({"host": host, "services": result}, sys.stdout, indent=1)
         print()
         return 0
 
@@ -159,6 +249,12 @@ def main(argv):
                 return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
             n /= 1024
 
+    cpu = "-" if host["cpu_percent"] is None else f"{host['cpu_percent']:.0f}%"
+    print(f"CPU {cpu} of {host['cpus']} threads (limits: {host['cpu_limits']:g}), "
+          f"RAM {iec(host['memory_used'])} / {iec(host['memory_total'])} (limits: {iec(host['memory_limits'])})")
+    for d in host["disks"]:
+        print(f"  {d['name']:<10} read {iec(d['read']):>7}/s  write {iec(d['write']):>7}/s  {d['label']}")
+    print()
     print(f"{'SERVICE':<12} {'STATE':<10} {'CPU':>7} {'LIMIT':>6}  {'MEMORY':>7} {'LIMIT':>7}  {'DISK':>7} {'SIZE':>7}")
     for r in result:
         states = set(r["units"].values())
@@ -168,7 +264,7 @@ def main(argv):
         d = r["disk"]
         print(f"{r['service']:<12} {state:<10} {cpu:>7} {lim:>6}  {iec(r['memory']):>7} {iec(r['memory_limit']):>7}"
               f"  {iec(d['used']):>7} {iec(d['size']):>7}")
-    print("\nCPU: 100% = one thread busy; LIMIT = cpus (threads). Limits: cpus / memory / storage in lm-server.toml.")
+    print("\nCPU: 100% = one thread busy; LIMIT = cpus (threads). MEMORY without reclaimable cache. Limits: cpus / memory / storage in lm-server.toml.")
     return 0
 
 

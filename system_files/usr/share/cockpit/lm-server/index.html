@@ -44,11 +44,16 @@
                     <button data-action="resources">Refresh</button>
                 </div>
             </header>
+            <div class="tiles host" id="svc-host">
+                <div class="tile" id="host-cpu"><h3>CPU</h3><div class="tile-body muted">Loading…</div></div>
+                <div class="tile" id="host-memory"><h3>Memory</h3><div class="tile-body muted">Loading…</div></div>
+                <div class="tile" id="host-disks"><h3>Disk I/O</h3><div class="tile-body muted">Loading…</div></div>
+            </div>
             <table class="deployments services">
                 <thead><tr><th>Service</th><th>State</th><th>CPU</th><th>Memory</th><th>Disk</th></tr></thead>
                 <tbody id="svc-rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
             </table>
-            <p class="hint">All of a service's containers together. CPU: its share of the threads it may use (<code>cpus</code>; without a limit, the whole machine). Limits: <code>cpus</code> (threads), <code>memory</code> and <code>storage</code> (a size) in its section of lm-server.toml; <code>disk</code> = where its data lives. CPU and memory refresh every 10 seconds, disk on <em>Refresh</em>.</p>
+            <p class="hint">All of a service's containers together. CPU: its share of the threads it may use (<code>cpus</code>; without a limit, the whole machine). Memory: what it holds without the file cache the kernel frees first (the cache is shown under it; it grows up to the limit and isn't a shortage). Limits: <code>cpus</code> (threads), <code>memory</code> and <code>storage</code> (a size) in its section of lm-server.toml; <code>disk</code> = where its data lives. CPU, memory and disk I/O refresh every 10 seconds, disk usage on <em>Refresh</em>.</p>
             <pre class="log" hidden></pre>
         </section>
         <div class="system-top">
@@ -126,15 +131,12 @@
                     <button class="primary" data-action="config-save" id="config-save" disabled>Save, push &amp; apply</button>
                 </div>
             </header>
-            <dl class="sys-source" id="cfg-info"></dl>
+            <dl class="sys-source">
+                <div id="setup-info"><dt>Repository</dt><dd class="muted">Not set up yet</dd></div>
+                <div id="cfg-info"></div>
+            </dl>
             <p class="hint"><em>Sync configs</em> applies what's on GitHub now; only services whose settings changed restart (automatically: <code>[updates] config</code>). <em>Edit</em> loads the file: saving checks it, commits and pushes it (the token needs <em>Contents: Read and write</em>), then applies it.</p>
             <textarea id="config-text" spellcheck="false" aria-label="lm-server.toml" hidden></textarea>
-            <pre class="log" hidden></pre>
-        </section>
-
-        <section class="card" id="setup-card">
-            <header><h2>Secrets repo (GitHub)</h2></header>
-            <dl class="sys-source" id="setup-info"><dt>Repository</dt><dd class="muted">Not set up yet</dd></dl>
             <details class="setup">
                 <summary>Change repository or token…</summary>
                 <form id="setup">

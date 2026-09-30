@@ -176,6 +176,8 @@ pre.log.failed {
     margin: 12px 0 0;
 }
 
+/* Groups of rows filled by different loaders, laid out as one grid. */
+.sys-source > div { display: contents; }
 .sys-source dt { font-weight: 600; }
 .sys-source dd { margin: 0; overflow-wrap: anywhere; }
 
@@ -370,6 +372,24 @@ table.services td {
 .meter .bar.high .fill {
     background: var(--warn);
 }
+
+/* ---- Services: the whole machine, above the table */
+.tiles.host .tile h3 { margin: 0 0 4px; }
+.tiles.host .sub {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+}
+.io {
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    gap: 2px 12px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+.io .dev { font-weight: 600; }
+.io .dev .sub { display: inline; font-weight: 400; margin-left: 4px; }
+.io .num { text-align: right; }
 
 /* ---- Automatic runs */
 .scroll {

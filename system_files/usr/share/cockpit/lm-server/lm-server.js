@@ -514,8 +514,8 @@ function renderConfig() {
         return;
     }
     if (!c) return;
+    // Repository, file and user: setup-info above (setupLoad).
     $("cfg-info").innerHTML = `
-        <dt>Repository</dt><dd><code>${esc(c.REPO)}</code> (${esc(c.BRANCH)})</dd>
         <dt>Applied</dt><dd><code>${esc(shortRev(c.SYNCED_REV) || "—")}</code> ${c.SYNCED_AT ? esc(ago(c.SYNCED_AT)) : "never"}</dd>
         <dt>On GitHub</dt><dd><code>${esc(shortRev(c.REMOTE_REV))}</code> ${cfgPending() ? `<span class="badge info">New</span>` : `<span class="badge ok">Applied</span>`}</dd>`;
 }
@@ -529,6 +529,7 @@ const iec = n => {
     }
 };
 let resources = null;
+let host = null;
 let resourcesRunning = false;
 
 // with_disk: also measure data folders that aren't a filesystem of their own
@@ -540,7 +541,7 @@ function loadResources(withDisk) {
     return cockpit.spawn(args, root)
         .then(out => {
             const prev = Object.fromEntries((resources || []).map(r => [r.service, r]));
-            resources = JSON.parse(out);
+            ({ host, services: resources } = JSON.parse(out));
             for (const r of resources) {
                 const old = prev[r.service]?.disk;
                 if (r.disk.used == null && old?.used != null) r.disk = old;
@@ -560,8 +561,35 @@ function meter(text, fraction, sub) {
     return `<div class="meter">${bar}<span>${text}</span>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
 }
 
+const pct = x => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
+const threads = n => `${+n.toFixed(1)} ${n === 1 ? "thread" : "threads"}`;
+
+// The whole machine: CPU, RAM against what the limits hand out, disk I/O.
+function renderHost() {
+    if (!host) return;
+    const tile = (id, html) => {
+        const body = $(id).querySelector(".tile-body");
+        body.classList.remove("muted");
+        body.innerHTML = html;
+    };
+    const cpu = host.cpu_percent == null ? null : host.cpu_percent / 100;
+    tile("host-cpu", meter(cpu == null ? "—" : `${pct(cpu)} of ${threads(host.cpus)}`, cpu,
+        host.cpu_limits ? `limits add up to ${threads(host.cpu_limits)} (a limit caps a service, the threads are shared)` : ""));
+    const used = host.memory_total ? host.memory_used / host.memory_total : null;
+    const limits = host.memory_total ? host.memory_limits / host.memory_total : null;
+    tile("host-memory", meter(`${iec(host.memory_used)} / ${iec(host.memory_total)}`, used,
+        `limits add up to ${iec(host.memory_limits)}${limits == null ? "" : ` (${pct(limits)})`}; without file cache, like Cockpit's overview`));
+    const rate = n => n == null ? "—" : `${iec(n)}/s`;
+    tile("host-disks", host.disks.length ? `<div class="io">
+        <span class="sub">Disk</span><span class="sub num">Read</span><span class="sub num">Write</span>
+        ${host.disks.map(d => `<span class="dev">${esc(d.name)}<span class="sub">${esc(d.label)}</span></span>
+            <span class="num">${rate(d.read)}</span><span class="num">${rate(d.write)}</span>`).join("")}
+    </div>` : `<span class="muted">No disks found.</span>`);
+}
+
 function renderResources() {
     if (!resources) return;
+    renderHost();
     $("svc-rows").innerHTML = resources.map(r => {
         const states = Object.values(r.units);
         let badge;
@@ -579,8 +607,6 @@ function renderResources() {
         // whole machine without a limit. (systemd counts 100% per thread.)
         const cores = r.cpu_limit || r.host_cpus || null;
         const cpuShare = r.cpu_percent == null || !cores ? null : r.cpu_percent / (cores * 100);
-        const pct = x => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
-        const threads = n => `${+n.toFixed(1)} ${n === 1 ? "thread" : "threads"}`;
         const cpuText = cpuShare == null ? "—"
             : `${pct(cpuShare)} of ${r.cpu_limit ? threads(r.cpu_limit) : `all ${threads(cores)}`}`;
         const mem = r.memory_limit ? `${iec(r.memory)} / ${iec(r.memory_limit)}` : iec(r.memory);
@@ -591,11 +617,12 @@ function renderResources() {
             <td><strong>${esc(r.service)}</strong><span class="sub">${esc(r.description)}${r.builtin ? " · part of the system image, not a container" : ""}</span></td>
             <td>${badge}</td>
             <td>${meter(cpuText, r.cpu_limit ? cpuShare : null, r.enabled && !r.cpu_limit ? "no limit" : "")}</td>
-            <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null, r.enabled && !r.memory_limit ? "no limit" : "")}</td>
+            <td>${meter(mem, r.memory_limit && r.memory != null ? r.memory / r.memory_limit : null,
+                [r.memory_cache ? `+ ${iec(r.memory_cache)} file cache` : "", r.enabled && !r.memory_limit ? "no limit" : ""].filter(Boolean).join(" · "))}</td>
             <td>${meter(diskText, d.size && d.used != null ? d.used / d.size : null, diskSub)}</td></tr>`;
     }).join("") || `<tr><td colspan="5" class="muted">No services.</td></tr>`;
     // Widths set here, not in the markup (Cockpit's CSP: no inline styles).
-    $("svc-rows").querySelectorAll(".fill[data-pct]").forEach(f => { f.style.width = f.dataset.pct + "%"; });
+    $("services").querySelectorAll(".fill[data-pct]").forEach(f => { f.style.width = f.dataset.pct + "%"; });
 }
 
 // While the page is shown (Cockpit hides it in the background otherwise).
@@ -684,7 +711,7 @@ $("setup").addEventListener("submit", event => {
     const token = f.get("token") + "\n";
     form.elements.token.value = "";
     exclusive(async () => {
-        await run(args, $("setup-card").querySelector(".log"), undefined, false, token);
+        await run(args, $("config").querySelector(".log"), undefined, false, token);
         await Promise.all([setupLoad(), loadConfig(), loadResources(false)]);
     });
 });
