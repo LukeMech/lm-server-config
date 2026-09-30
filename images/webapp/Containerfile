@@ -2,28 +2,40 @@
 # (toolbox, website, exp). No site code in the image: the entrypoint clones
 # APP_REPO at start (private repos with APP_GITHUB_TOKEN), keeps it pulled,
 # and restarts when a new commit lands.
-FROM quay.io/fedora/fedora-minimal:44
+FROM quay.io/almalinuxorg/10-minimal:10
 
-# google-noto-color-emoji-fonts: emoji (flags too) in the rendercv CV --
-# Typst picks up system fonts and renders its COLRv1 glyphs in color.
-RUN dnf5 -y install --setopt=install_weak_deps=False \
+# From the system only the interpreter and non-Python tools: python3 (+ the
+# pip wheel `python3 -m venv` bootstraps from), git (the site repo),
+# findutils (entrypoint). Every Python package comes from pip (below).
+RUN microdnf -y install --setopt=install_weak_deps=0 --nodocs \
+        curl \
+        findutils \
         git-core \
-        google-noto-color-emoji-fonts \
         python3 \
-        python3-babel \
-        python3-flask \
-        python3-flask-babel \
-        python3-gunicorn \
-        python3-pip \
-    && dnf5 -y clean all \
-    && python3 -m babel.messages.frontend --version \
-    && test -f /usr/share/fonts/google-noto-color-emoji-fonts/Noto-COLRv1.ttf
+        python3-pip-wheel \
+    && microdnf -y clean all
 
-# Everything the sites need that Fedora doesn't package -- one image for all
-# of them, nothing is installed per site at start:
-#   exp (LukeMech/CV): rendercv renders the CV at every pull, pdf-compressor
-#   (iLovePDF) shrinks it (the CV repo's compress.sh, from APP_BUILD_CMD)
-RUN pip install --no-cache-dir --root-user-action=ignore 'rendercv[full]' pdf-compressor \
+# Emoji (flags too) in the rendercv CV: Typst picks up system fonts and
+# renders the COLRv1 glyphs in color. EL's google-noto-color-emoji-fonts is
+# older and has only the bitmap (CBDT) font, so the COLRv1 one comes from
+# the upstream release, checksum-pinned.
+ARG NOTO_EMOJI_VERSION=v2.051
+ARG NOTO_EMOJI_SHA256=0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2
+RUN mkdir -p /usr/share/fonts/noto-emoji \
+    && curl -fsSL -o /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf \
+        "https://github.com/googlefonts/noto-emoji/raw/${NOTO_EMOJI_VERSION}/fonts/Noto-COLRv1.ttf" \
+    && echo "${NOTO_EMOJI_SHA256}  /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf" | sha256sum -c -
+
+# Everything the sites need, in one venv -- one image for all of them,
+# nothing is installed per site at start (requirements.txt says what each
+# package is for).
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+COPY requirements.txt /opt/lm-server-webapp/requirements.txt
+RUN python3 -m venv /opt/venv \
+    && pip install --no-cache-dir --disable-pip-version-check -r /opt/lm-server-webapp/requirements.txt \
+    && python3 -c 'import flask, flask_babel, babel, gunicorn' \
+    && pybabel --version \
     && rendercv --version \
     && pdf-compressor --help >/dev/null
 

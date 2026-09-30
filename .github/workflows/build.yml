@@ -11,7 +11,7 @@ on:
       - "**.md"
       - ".github/workflows/build-images.yml"
   schedule:
-    - cron: "0 10 1,15 * *" # ~every 2 weeks, catches Fedora updates in quiet periods
+    - cron: "0 10 1,15 * *" # ~every 2 weeks, catches AlmaLinux updates in quiet periods
   push:
     branches-ignore:
       - "dependabot/**"
@@ -172,14 +172,14 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # v<fedora>.<date>[.N] -- Fedora version read from the Containerfile.
+      # v<almalinux major>.<date>[.N] -- AlmaLinux version read from the Containerfile.
       - name: Compute release tag
         id: release-tag
         run: |
           set -euo pipefail
-          FEDORA_VER=$(awk -F'[:@]' '/^FROM quay.io\/fedora\/fedora-bootc:/ {print $2; exit}' Containerfile)
-          [[ -n "${FEDORA_VER}" ]] || { echo "no fedora-bootc FROM line" >&2; exit 1; }
-          PREFIX="v${FEDORA_VER}.$(date -u +%Y%m%d)"
+          ALMA_VER=$(awk -F'[:@]' '/^FROM quay.io\/almalinuxorg\/almalinux-bootc:/ {print $2; exit}' Containerfile)
+          [[ -n "${ALMA_VER}" ]] || { echo "no almalinux-bootc FROM line" >&2; exit 1; }
+          PREFIX="v${ALMA_VER}.$(date -u +%Y%m%d)"
           if ! git rev-parse -q --verify "refs/tags/${PREFIX}" >/dev/null && [[ -z "$(git tag -l "${PREFIX}.*")" ]]; then
             TAG="${PREFIX}"
           else

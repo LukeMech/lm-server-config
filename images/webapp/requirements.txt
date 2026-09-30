@@ -1,0 +1,14 @@
+# Every Python package of lm-server-webapp (images/webapp/Containerfile).
+# Pinned; Dependabot (pip) proposes the updates.
+
+# All sites: Flask apps served by gunicorn, translated with Flask-Babel
+# (pybabel compiles the sites' .po catalogs at start).
+Flask==3.1.3
+Flask-Babel==4.0.0
+Babel==2.18.0
+gunicorn==26.2.0
+
+# exp (LukeMech/CV): rendercv renders the CV at every pull, pdf-compressor
+# (iLovePDF) shrinks it (the CV repo's compress.sh, from APP_BUILD_CMD).
+rendercv[full]==2.8
+pdf-compressor==0.4.0

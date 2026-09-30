@@ -59,7 +59,7 @@ build-image $name $tag=default_tag:
     #!/usr/bin/env bash
     set -euox pipefail
     # Version = the date + commit tags CI pushes (Cockpit > Updates shows it;
-    # otherwise the Fedora base image's "44" would be inherited).
+    # otherwise the AlmaLinux base image's "10.x" would be inherited).
     rev=$(git rev-parse HEAD 2>/dev/null || echo unknown)
     podman build --pull=newer \
         --label "org.opencontainers.image.version=$(date -u +%Y%m%d).${rev::7}" \

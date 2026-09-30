@@ -32,7 +32,7 @@ installed=()
 for p in "${REMOVE[@]}"; do
     rpm -q "${p}" &>/dev/null && installed+=("${p}")
 done
-((${#installed[@]})) && dnf5 -y remove "${installed[@]}"
+((${#installed[@]})) && dnf -y remove "${installed[@]}"
 # Nothing Bluetooth may come back through another package's dependencies.
 if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
     echo "error: Bluetooth packages in the image:" ${bt} >&2
@@ -59,6 +59,20 @@ for key in $(jq -r '.. | .keyPath? // empty' /etc/containers/policy.json); do
     }
 done
 test -x /usr/lib/systemd/system-generators/zram-generator
+# Our zram config, not zram-generator-defaults' (same path, a package would
+# silently replace it).
+grep -q '^zram-size = ram / 2' /usr/lib/systemd/zram-generator.conf || {
+    echo "error: /usr/lib/systemd/zram-generator.conf is not lm-server's" >&2
+    exit 1
+}
+# Cockpit pages that EL folds into cockpit-system instead of own packages.
+for page in networkmanager selinux metrics; do
+    test -f "/usr/share/cockpit/${page}/manifest.json" || {
+        echo "error: Cockpit page '${page}' missing from the image" >&2
+        exit 1
+    }
+done
+test -d /usr/lib/tuned/profiles/powersave
 
 # Validate every quadlet (and its # lm-server: directives) now, not at first
 # boot on the server.
@@ -66,11 +80,11 @@ test -x /usr/lib/systemd/system-generators/zram-generator
 /usr/libexec/podman/quadlet -dryrun >/dev/null
 
 # Rebuild the initramfs: it carries its own copy of os-release (initrd-release),
-# so without this the initrd still prints "Welcome to Fedora Linux".
+# so without this the initrd still prints "Welcome to AlmaLinux".
 kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
 DRACUT_NO_XATTR=1 dracut --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree -f \
     "/usr/lib/modules/${kver}/initramfs.img"
 chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"
 
-dnf5 -y clean all
+dnf -y clean all
 rm -rf /var/lib/dnf

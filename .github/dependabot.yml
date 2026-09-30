@@ -14,3 +14,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # lm-server-webapp's Python packages (images/webapp/requirements.txt, pinned).
+  - package-ecosystem: "pip"
+    directory: "/images/webapp"
+    schedule:
+      interval: "weekly"

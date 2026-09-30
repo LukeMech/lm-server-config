@@ -1,11 +1,11 @@
 # lm-server
 
-The home server (formerly Proxmox + LXC + a Docker VM) as **one Fedora bootc
+The home server (formerly Proxmox + LXC + a Docker VM) as **one AlmaLinux bootc
 image**. GitHub Actions builds it, you install it from the ISO on the
 [releases page](https://github.com/LukeMech/lm-server-config/releases), and it updates
 atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMech/immutable-sbc).
 
-- **System**: `ghcr.io/lukemech/lm-server` (Fedora bootc 44, cosign-signed).
+- **System**: `ghcr.io/lukemech/lm-server` (AlmaLinux 10 bootc, cosign-signed).
   An upgrade downloads the new image and switches to it on reboot. The previous
   image stays available for rollback.
 - **Services**: podman [quadlets](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
@@ -217,7 +217,7 @@ disk. To replace a failed HDD: *Remove* it from the RAID there, swap the disk,
 then *Add disk* on the same page; the rebuild starts on its own. Each drive's
 page shows its SMART assessment and can run a self-test; from a shell,
 `smartctl -a /dev/sdX`, `cat /proc/mdstat` and `mdadm --detail /dev/md/hdd-mirror`.
-Fedora's `raid-check.timer` reads the whole mirror weekly and repairs mismatches
+mdadm's `raid-check.timer` reads the whole mirror weekly and repairs mismatches
 between the two disks. Unlike ZFS, mdraid + XFS has no checksums on the data,
 so it can't tell which copy is right if a disk returns bad data without
 reporting an error.
@@ -232,21 +232,10 @@ ZFS `hdd-mirror`: **[MIGRATION.md](MIGRATION.md)**.
 Cockpit > Virtual machines creates and runs x86_64 VMs with KVM (full speed):
 Windows, other Linux distributions, anything that can't be a container.
 
-**Other architectures** (ARM64, RISC-V) run emulated: no KVM, so several times
-slower, but fine for testing (e.g. SBC images). Cockpit's *Create* dialog only
-makes VMs of the host's architecture, so create them once with `virt-install`;
-Cockpit then shows, starts and stops them (console included) like any other:
+`virt-install` is there too, for VMs scripted from a shell.
 
-```sh
-sudo virt-install --connect qemu:///system --name arm-test \
-  --arch aarch64 --machine virt --boot uefi \
-  --vcpus 2 --memory 2048 --disk size=20 \
-  --cdrom /var/lib/libvirt/images/debian-13-arm64-netinst.iso \
-  --os-variant debian13 --graphics vnc --noautoconsole
-```
-
-`--arch riscv64` works the same way. An existing disk image instead of an
-installer: `--import --disk path=/var/lib/libvirt/images/<image>.qcow2`.
+Only the host's architecture: AlmaLinux ships no QEMU for other architectures
+(ARM64, RISC-V), so there are no emulated VMs.
 
 ## First install
 

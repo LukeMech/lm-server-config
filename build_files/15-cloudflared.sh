@@ -5,7 +5,7 @@
 set -ouex pipefail
 
 curl -fsSL https://pkg.cloudflare.com/cloudflared.repo -o /etc/yum.repos.d/cloudflared.repo
-dnf5 -y install cloudflared
+dnf -y install cloudflared
 rm -f /etc/yum.repos.d/cloudflared.repo
 
 # Unit: lm-server-cloudflared.service (own name, so the package's unit, if

@@ -10,7 +10,7 @@ on:
     branches-ignore: ["dependabot/**"]
     paths: ["images/**", ".github/workflows/build-images.yml"]
   schedule:
-    - cron: "0 6 * * 1" # weekly: picks up fedora-minimal / package updates
+    - cron: "0 6 * * 1" # weekly: picks up AlmaLinux minimal / pip package updates
   workflow_dispatch:
 
 env:

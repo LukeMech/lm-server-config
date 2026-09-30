@@ -11,9 +11,11 @@ FROM scratch AS ctx
 COPY build_files /
 COPY system_files /system_files
 
-# Floating tag on purpose (same reasoning as immutable-sbc: a pinned digest
-# 404s once quay.io garbage-collects it).
-FROM quay.io/fedora/fedora-bootc:44
+# AlmaLinux 10 (RHEL 10 rebuild): 10-year lifecycle, minor releases (10.x)
+# follow automatically under this tag. Floating tag on purpose (same reasoning
+# as immutable-sbc: a pinned digest 404s once quay.io garbage-collects it).
+# Never :latest -- that is still AlmaLinux 9.
+FROM quay.io/almalinuxorg/almalinux-bootc:10
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
