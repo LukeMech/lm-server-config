@@ -5,7 +5,9 @@
 # Modular libvirt (virtqemud & co., EL's default -- there is no monolithic
 # libvirtd.socket) and qemu-kvm-core instead of libvirt-daemon-kvm/qemu-kvm,
 # which pull in the GTK/SDL/audio front-ends a headless server never uses.
-# VMs are shown over VNC/SPICE in Cockpit's console.
+# VMs are shown over VNC/SPICE in Cockpit's console. (10-cockpit.sh's Cockpit
+# packages hard-require the full qemu-kvm anyway -- SPICE, OpenGL, audio --
+# so it is already installed by the time this runs.)
 #
 # Host architecture (x86_64) only: EL ships no QEMU for other architectures
 # (no qemu-system-aarch64/riscv64 in AlmaLinux, EPEL, Raven or GhettoForge).

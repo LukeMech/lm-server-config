@@ -2,9 +2,9 @@
 set -ouex pipefail
 
 # Firmware / tools for hardware a headless server doesn't have (Wi-Fi, WWAN,
-# Bluetooth, sound, NVIDIA). Kept: CPU microcode, GPU firmware for iGPUs, realtek-firmware
-# (r8169 Ethernet). nfs-utils: nothing here mounts NFS (its rpc.statd only logs
-# errors at boot).
+# Bluetooth, sound, NVIDIA), and features it doesn't use (below). Kept: CPU
+# microcode, GPU firmware for iGPUs, realtek-firmware (r8169 Ethernet).
+# nfs-utils: nothing here mounts NFS (its rpc.statd only logs errors at boot).
 REMOVE=(
     atheros-firmware
     brcmfmac-firmware
@@ -20,6 +20,39 @@ REMOVE=(
     qcom-wwan-firmware
     tiwilink-firmware
     nfs-utils
+    # No kdump (it can't find its dump target on bootc + btrfs, commit 536293a);
+    # almalinux-bootc ships it.
+    kdump-utils
+    kexec-tools
+    makedumpfile
+    memstrack
+    # Joining AD / FreeIPA / LDAP domains: local accounts only here.
+    sssd-ad
+    sssd-ipa
+    sssd-krb5
+    sssd-ldap
+    adcli
+    # Cloud VMs (Azure, cloud-init network, growing the root partition).
+    WALinuxAgent-udev
+    NetworkManager-cloud-setup
+    cloud-utils-growpart
+    # LUKS unlocked by TPM: no LUKS here.
+    clevis
+    clevis-dracut
+    clevis-luks
+    clevis-pin-tpm2
+    clevis-systemd
+    luksmeta
+    jose
+    # Desktop / dual-boot / NFS leftovers, the legacy iptables service
+    # (firewalld uses nftables).
+    toolbox
+    flatpak-session-helper
+    os-prober
+    rpcbind
+    gssproxy
+    quota
+    iptables-nft-services
     # No Bluetooth on this server (the kernel modules are blocked in
     # /usr/lib/modprobe.d/lm-server-no-bluetooth.conf).
     bluez
@@ -33,6 +66,20 @@ for p in "${REMOVE[@]}"; do
     rpm -q "${p}" &>/dev/null && installed+=("${p}")
 done
 ((${#installed[@]})) && dnf -y remove "${installed[@]}"
+# dnf remove also removes whatever requires a removed package: fail the build
+# if that took anything the server needs.
+KEEP=(
+    qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install
+    edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged
+    cockpit-files podman bootc NetworkManager firewalld sudo sos dracut
+    grub2-efi-x64 shim-x64 linux-firmware microcode_ctl flashrom
+)
+for p in "${KEEP[@]}"; do
+    rpm -q "${p}" &>/dev/null || {
+        echo "error: '${p}' was removed along with REMOVE's packages" >&2
+        exit 1
+    }
+done
 # Nothing Bluetooth may come back through another package's dependencies.
 if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
     echo "error: Bluetooth packages in the image:" ${bt} >&2
