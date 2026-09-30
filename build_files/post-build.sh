@@ -39,11 +39,13 @@ if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); th
     exit 1
 fi
 
-# Hard check: every command the lm-server scripts, units and Cockpit page call.
+# Hard check: every command the lm-server scripts, units, Cockpit page and
+# ostree (semodule, when finalizing an upgrade) call.
 for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint systemd-escape flock base64 sha256sum od \
     useradd usermod getent timedatectl hostnamectl systemd-analyze \
     firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs lvcreate smartctl \
-    mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm pminfo tuned-adm; do
+    mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm pminfo tuned-adm \
+    semodule semanage setsebool restorecon; do
     command -v "${cmd}" >/dev/null || {
         echo "error: required command '${cmd}' missing from the image" >&2
         exit 1

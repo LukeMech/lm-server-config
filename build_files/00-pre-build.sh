@@ -19,6 +19,9 @@ dnf -y install \
     skopeo \
     `# system updates` \
     bootc \
+    `# SELinux tools: ostree runs the new deployment's semodule to rebuild the policy when /etc/selinux has local changes (without it every upgrade fails to finalize); semanage/setsebool for Cockpit > SELinux` \
+    policycoreutils \
+    policycoreutils-python-utils \
     `# network, remote access, firewall` \
     firewalld \
     iproute \
