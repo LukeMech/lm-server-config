@@ -4,6 +4,7 @@ set -ouex pipefail
 # Firmware / tools for hardware a headless server doesn't have (Wi-Fi, WWAN,
 # Bluetooth, sound, GPUs, Realtek NICs), and features it doesn't use (below).
 # nfs-utils: nothing here mounts NFS (its rpc.statd only logs errors at boot).
+# The installer ISO drops the same packages (keep in sync: iso/Containerfile).
 REMOVE=(
     # The server: Intel i5-4590 (Haswell) with its iGPU (i915) and an Intel
     # NIC (e1000e) -- none of them loads firmware. Intel CPU microcode is

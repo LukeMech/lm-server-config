@@ -14,6 +14,30 @@ FROM quay.io/almalinuxorg/almalinux-bootc:10
 RUN dnf -y reinstall shim-x64 \
     && dnf clean all
 
+# A smaller ISO: the installer drops what the installed system drops (keep in
+# sync with REMOVE in build_files/post-build.sh) -- firmware for hardware the
+# server doesn't have (only Intel before 6th gen/Skylake: Haswell-era CPU,
+# i915 iGPU without firmware, e1000e NIC), kdump, NFS, Bluetooth, domain
+# join, cloud agents -- plus the CJK fonts osbuild's installer has (it runs
+# in English/Polish here). Before Anaconda: whatever it needs, its install
+# brings back.
+RUN remove=() \
+    && for p in amd-ucode-firmware amd-gpu-firmware intel-gpu-firmware nvidia-gpu-firmware \
+        realtek-firmware atheros-firmware brcmfmac-firmware cirrus-audio-firmware \
+        intel-audio-firmware iwlwifi-dvm-firmware iwlwifi-mvm-firmware iwlegacy-firmware \
+        libertas-firmware mt7xxx-firmware nxpwireless-firmware qcom-wwan-firmware \
+        tiwilink-firmware nfs-utils kdump-utils kexec-tools makedumpfile memstrack \
+        sssd-ad sssd-ipa sssd-krb5 sssd-ldap adcli \
+        WALinuxAgent-udev NetworkManager-cloud-setup cloud-utils-growpart \
+        toolbox flatpak-session-helper rpcbind gssproxy quota iptables-nft-services \
+        bluez bluez-hid2hci bluez-libs bluez-obexd NetworkManager-bluetooth \
+        google-noto-sans-cjk-fonts; do \
+        rpm -q "${p}" >/dev/null 2>&1 && remove+=("${p}"); \
+    done \
+    && if [ "${#remove[@]}" -gt 0 ]; then dnf -y remove "${remove[@]}"; fi \
+    && rpm -q NetworkManager linux-firmware microcode_ctl \
+    && dnf clean all
+
 # Anaconda, and what image-builder needs to build the ISO out of this.
 RUN dnf -y install \
         anaconda \
@@ -26,7 +50,6 @@ RUN dnf -y install \
         plymouth \
         default-fonts-core-sans \
         default-fonts-other-sans \
-        google-noto-sans-cjk-fonts \
         xorriso \
         squashfs-tools \
         fuse-overlayfs \
