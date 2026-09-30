@@ -244,4 +244,3 @@ jobs:
       tag: ${{ needs.release-meta.outputs.tag }}
     permissions:
       contents: write
-      packages: write # the installer container (build-iso.yml)

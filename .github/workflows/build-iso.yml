@@ -23,10 +23,11 @@ on:
         default: ""
 
 env:
-  # The payload the ISO installs, and the installer environment it boots
-  # (iso/Containerfile) -- image-builder's bootc-generic-iso puts both on it.
+  # The payload the ISO installs, and the image-builder that builds the ISO
+  # (bootc-generic-iso: the installer environment is iso/Containerfile).
   IMAGE: "ghcr.io/lukemech/lm-server:latest"
-  INSTALLER: "ghcr.io/lukemech/lm-server-installer:latest"
+  IMAGE_BUILDER: "ghcr.io/osbuild/image-builder-cli:latest"
+  INSTALLER: "localhost/lm-server-installer:latest"
 
 concurrency:
   group: build-iso-${{ github.ref || github.run_id }}
@@ -38,7 +39,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      packages: write
     steps:
       # Same as Bluefin/Bazzite: the installer container, the payload and
       # the ISO (which holds both) don't fit on the stock runner's disk.
@@ -48,25 +48,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # The action pulls bootc_ref from a registry (a localhost/ image can't
-      # be pulled), so the installer goes to GHCR first. Root's podman: the
-      # action runs image-builder rootful, on root's container storage.
-      - name: Build and push the installer container
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euxo pipefail
-          echo "${GH_TOKEN}" | sudo podman login ghcr.io --username "${{ github.actor }}" --password-stdin
-          sudo podman build --pull=newer --tag "${INSTALLER}" iso/
-          sudo podman push "${INSTALLER}"
+      # Not osbuild/image-builder-action: it pulls bootc_ref from a registry,
+      # and the installer is built here, not published.
+      - name: Build installer container
+        run: sudo podman build --pull=newer --tag "${INSTALLER}" iso/
+
+      - name: Pull the payload
+        run: sudo podman pull "${IMAGE}"
 
       - name: Build ISO
         id: build
-        uses: osbuild/image-builder-action@a56f95dd77327e604a4f4d9fc06a9641313fda36 # main
-        with:
-          image_type: bootc-generic-iso
-          bootc_ref: ${{ env.INSTALLER }}
-          bootc_installer_payload_ref: ${{ env.IMAGE }}
+        run: |
+          set -euxo pipefail
+          mkdir -p output
+          sudo podman run --rm --privileged --pull=newer \
+            -v "${PWD}/output:/output" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            "${IMAGE_BUILDER}" \
+            build --output-dir /output \
+            --bootc-ref "${INSTALLER}" \
+            --bootc-installer-payload-ref "${IMAGE}" \
+            bootc-generic-iso
+          echo "output-directory=${PWD}/output" >> "$GITHUB_OUTPUT"
 
       # GitHub release assets are capped at 2 GiB: a bigger ISO is split into
       # parts (join with `cat lm-server-*.iso.part-* > lm-server.iso`).
@@ -76,8 +79,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # The action writes to ./output (<distro>-<type>-<arch>/...).
-          ISO=$(sudo find output -iname '*.iso' -print -quit)
+          ISO=$(sudo find "${{ steps.build.outputs.output-directory }}" -iname '*.iso' -print -quit)
           [[ -n "${ISO}" ]] || { echo "no ISO produced" >&2; exit 1; }
           NAME="lm-server${TAG:+-${TAG}}.iso"
           mkdir -p dist
