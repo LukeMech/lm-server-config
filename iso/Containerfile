@@ -1,0 +1,64 @@
+# The installer ISO's environment: Anaconda as a bootable container.
+# image-builder (bootc-generic-iso, build-iso.yml / `just build-iso`) turns
+# it into the ISO and embeds ghcr.io/lukemech/lm-server:latest as the
+# payload that Anaconda installs (kickstart: interactive-defaults.ks).
+#
+# Follows osbuild's own EL10 installer, stream10-installer in
+# https://github.com/osbuild/bootc-foundry, on AlmaLinux instead of CentOS
+# Stream. No heredocs (the CI's podman is too old for COPY <<EOT).
+FROM quay.io/almalinuxorg/almalinux-bootc:10
+
+# bootc images ship an empty /boot (bootupd keeps it in
+# /usr/lib/bootupd/updates); the ISO needs /boot/efi/EFI populated, which
+# reinstalling shim does.
+RUN dnf -y reinstall shim-x64 \
+    && dnf clean all
+
+# Anaconda, and what image-builder needs to build the ISO out of this.
+RUN dnf -y install \
+        anaconda \
+        anaconda-install-img-deps \
+        anaconda-dracut \
+        dracut-config-generic \
+        dracut-network \
+        net-tools \
+        grub2-efi-x64-cdboot \
+        plymouth \
+        default-fonts-core-sans \
+        default-fonts-other-sans \
+        google-noto-sans-cjk-fonts \
+        xorriso \
+        squashfs-tools \
+        fuse-overlayfs \
+    && dnf clean all
+
+# ISO label and boot menu (read by image-builder).
+COPY iso.yaml /usr/lib/image-builder/bootc/iso.yaml
+
+# What Anaconda installs and how; the installer only asks for the disk and
+# the network.
+COPY interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
+COPY anaconda.conf /etc/anaconda/conf.d/90-lm-server.conf
+
+# What lorax normally does to make Anaconda run, the bare minimum: the
+# "install" user runs Anaconda, boot into anaconda.target, a shell on VT2.
+RUN echo "install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda" >> /etc/passwd \
+    && echo "install::14438:0:99999:7:::" >> /etc/shadow \
+    && passwd -d root
+RUN mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives \
+    && mv /etc/yum.repos.d /etc/anaconda.repos.d \
+    && ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target \
+    && rm -v /usr/lib/systemd/system-generators/systemd-gpt-auto-generator
+RUN rm /usr/lib/systemd/system/autovt@.service \
+    && ln -s /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service
+COPY anaconda-shell.conf /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
+# The graphical installer runs as root; PipeWire refuses to otherwise.
+COPY pipewire-allowroot.conf /etc/systemd/user/pipewire.service.d/allowroot.conf
+COPY pipewire-allowroot.conf /etc/systemd/user/pipewire.socket.d/allowroot.conf
+
+# Initramfs that boots into the installer.
+RUN kernel=$(kernel-install list --json pretty | jq -r '.[] | select(.has_kernel == true) | .version') \
+    && DRACUT_NO_XATTR=1 dracut --force -v --zstd --reproducible --no-hostonly \
+        --add "anaconda" \
+        --add "lvm" \
+        "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"

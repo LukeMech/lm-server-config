@@ -1,0 +1,8 @@
+# image-builder's ISO config: volume label and the boot menu.
+# inst.stage2 must name the same label.
+label: "LM-Server-Installer"
+grub2:
+  entries:
+    - name: "Install LM-Server"
+      linux: "/images/pxeboot/vmlinuz inst.stage2=hd:LABEL=LM-Server-Installer console=tty0 inst.graphical selinux=0 rhgb quiet"
+      initrd: "/images/pxeboot/initrd.img"

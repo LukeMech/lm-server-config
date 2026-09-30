@@ -23,7 +23,11 @@ on:
         default: ""
 
 env:
+  # The payload the ISO installs, and the image-builder that builds the ISO
+  # (bootc-generic-iso: the installer environment is iso/Containerfile).
   IMAGE: "ghcr.io/lukemech/lm-server:latest"
+  IMAGE_BUILDER: "ghcr.io/osbuild/image-builder-cli:latest"
+  INSTALLER: "localhost/lm-server-installer:latest"
 
 concurrency:
   group: build-iso-${{ github.ref || github.run_id }}
@@ -36,23 +40,36 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Same as Bluefin/Bazzite. Not needed yet -- the build fits on the stock
-      # runner; uncomment if a build or rechunk runs out of disk space.
-      # - name: Maximize build space
-      #   uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6 # v10
+      # Same as Bluefin/Bazzite: the installer container, the payload and
+      # the ISO (which holds both) don't fit on the stock runner's disk.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6 # v10
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Not osbuild/image-builder-action: it pulls bootc_ref from a registry,
+      # and the installer is built here, not published.
+      - name: Build installer container
+        run: sudo podman build --pull=newer --tag "${INSTALLER}" iso/
+
+      - name: Pull the payload
+        run: sudo podman pull "${IMAGE}"
+
       - name: Build ISO
         id: build
-        uses: osbuild/bootc-image-builder-action@028e4d28330efe546229eb9cb52aee78174d2347 # main
-        with:
-          config-file: ./disk_config/iso.toml
-          image: ${{ env.IMAGE }}
-          # No --use-librepo: with AlmaLinux's repos every installer package
-          # download fails through librepo; the default (curl) works.
-          types: anaconda-iso
+        run: |
+          set -euxo pipefail
+          mkdir -p output
+          sudo podman run --rm --privileged --pull=newer \
+            -v "${PWD}/output:/output" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            "${IMAGE_BUILDER}" \
+            build --output-dir /output \
+            --bootc-ref "${INSTALLER}" \
+            --bootc-installer-payload-ref "${IMAGE}" \
+            bootc-generic-iso
+          echo "output-directory=${PWD}/output" >> "$GITHUB_OUTPUT"
 
       # GitHub release assets are capped at 2 GiB: a bigger ISO is split into
       # parts (join with `cat lm-server-*.iso.part-* > lm-server.iso`).

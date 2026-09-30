@@ -10,6 +10,7 @@ export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export bib_image := env_var("BIB_IMAGE")
+export image_builder_image := env_var("IMAGE_BUILDER_IMAGE")
 
 alias build-vm := build-qcow2
 
@@ -117,11 +118,10 @@ _rootful_load_image $target_image $tag:
         sudo podman pull "${target_image}:${tag}"
     fi
 
-# bootc-image-builder: <type> is iso (anaconda-iso) | qcow2 | raw
+# bootc-image-builder: <type> is qcow2 | raw
 _build-bib $target_image $tag $type $config: (_rootful_load_image target_image tag)
     #!/usr/bin/env bash
     set -euo pipefail
-    [[ "${type}" == iso ]] && type=anaconda-iso
     BUILDTMP=$(mktemp -p "${PWD}" -d -t _build-bib.XXXXXXXXXX)
     sudo podman run --rm -it --privileged --pull=newer --net=host \
       --security-opt label=type:unconfined_t \
@@ -134,9 +134,27 @@ _build-bib $target_image $tag $type $config: (_rootful_load_image target_image t
     sudo rmdir "${BUILDTMP}"
     sudo chown -R "${USER}:${USER}" output/
 
-# Installer ISO (from the local image, or from GHCR with target_image=ghcr.io/lukemech/lm-server)
+# Installer ISO (from the local image, or from GHCR with target_image=ghcr.io/lukemech/lm-server):
+# image-builder's bootc-generic-iso, the installer environment is iso/Containerfile
 [group('Disk images')]
-build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "disk_config/iso.toml")
+build-iso $target_image=("localhost/" + image_name) $tag=default_tag: (_rootful_load_image target_image tag)
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    # The kickstart installs containers-storage:ghcr.io/lukemech/lm-server:latest,
+    # so the payload goes into the ISO under that name.
+    payload="{{ registry }}/{{ image_name }}:latest"
+    [[ "${target_image}:${tag}" == "${payload}" ]] || sudo podman tag "${target_image}:${tag}" "${payload}"
+    sudo podman build --pull=newer --tag localhost/lm-server-installer:latest iso/
+    mkdir -p output
+    sudo podman run --rm -it --privileged --pull=newer \
+      -v "$(pwd)/output:/output" \
+      -v /var/lib/containers/storage:/var/lib/containers/storage \
+      "${image_builder_image}" \
+      build --output-dir /output \
+      --bootc-ref localhost/lm-server-installer:latest \
+      --bootc-installer-payload-ref "${payload}" \
+      bootc-generic-iso
+    sudo chown -R "${USER}:${USER}" output/
 
 # QCOW2 for testing in a VM
 [group('Disk images')]

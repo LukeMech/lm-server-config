@@ -284,14 +284,18 @@ system_files/                          copied onto / of the system image
   usr/share/cockpit/lm-server/         the Cockpit page
   usr/bin/lm-server                    the CLI
 images/webapp/                         our own service image
-disk_config/                           bootc-image-builder configs (ISO, qcow2)
+iso/                                   installer ISO: Anaconda as a bootable container
+                                       (+ kickstart), built with image-builder
+disk_config/                           bootc-image-builder config (qcow2 for VM tests)
 lm-server-config-secrets/                     TEMPLATE of the private secrets repo
 scripts/                               release changelog helpers (from immutable-sbc)
 ```
 
 CI: [build.yml](.github/workflows/build.yml) builds the system image, pushes and
-signs it, publishes release `v44.YYYYMMDD[.N]` with a package + commit changelog,
-and attaches the ISO ([build-iso.yml](.github/workflows/build-iso.yml)).
+signs it, publishes release `v10.YYYYMMDD[.N]` with a package + commit changelog,
+and attaches the ISO ([build-iso.yml](.github/workflows/build-iso.yml): the
+installer container from `iso/` + the image as its payload, image-builder's
+`bootc-generic-iso`).
 [build-images.yml](.github/workflows/build-images.yml) builds `images/*`.
 The repo secret **`SIGNING_SECRET`** is required: the cosign key matching
 `system_files/etc/pki/containers/lukemech-cosign.pub`. The server refuses unsigned
