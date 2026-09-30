@@ -45,7 +45,7 @@ for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint 
     useradd usermod getent timedatectl hostnamectl systemd-analyze \
     firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs lvcreate smartctl \
     mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm pminfo tuned-adm \
-    semodule semanage setsebool restorecon kdumpctl makedumpfile; do
+    semodule semanage setsebool restorecon; do
     command -v "${cmd}" >/dev/null || {
         echo "error: required command '${cmd}' missing from the image" >&2
         exit 1

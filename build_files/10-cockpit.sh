@@ -7,7 +7,8 @@
 #
 # Network, SELinux and the performance profile (tuned) pages are part of
 # cockpit-system on EL (it provides cockpit-networkmanager, cockpit-selinux,
-# cockpit-tuned), so is Kernel dump (kdump: 25-kdump.sh).
+# cockpit-tuned). Its Kernel dump page is hidden
+# (/etc/cockpit/kdump.override.json): no kdump in this image.
 #
 # setroubleshoot: Cockpit > SELinux lists access denials, with an
 # explanation and the suggested fix.
