@@ -6,7 +6,18 @@
 # Follows osbuild's own EL10 installer, stream10-installer in
 # https://github.com/osbuild/bootc-foundry, on AlmaLinux instead of CentOS
 # Stream. No heredocs (the CI's podman is too old for COPY <<EOT).
+#
+# Built from the repo root (podman build -f iso/Containerfile .), for the
+# shared build_files/remove-packages.sh.
 FROM quay.io/almalinuxorg/almalinux-bootc:10
+
+# Before anything is installed: drop what the installed system drops too
+# (build_files/remove-packages.sh -- firmware for anything but lm-server's
+# Intel hardware, kdump, NFS, Bluetooth, domain join, cloud agents). Whatever
+# Anaconda really needs, its install below brings back.
+RUN --mount=type=bind,source=build_files/remove-packages.sh,target=/tmp/remove-packages.sh \
+    bash /tmp/remove-packages.sh \
+    && dnf clean all
 
 # bootc images ship an empty /boot (bootupd keeps it in
 # /usr/lib/bootupd/updates); the ISO needs /boot/efi/EFI populated, which
@@ -14,31 +25,9 @@ FROM quay.io/almalinuxorg/almalinux-bootc:10
 RUN dnf -y reinstall shim-x64 \
     && dnf clean all
 
-# A smaller ISO: the installer drops what the installed system drops (keep in
-# sync with REMOVE in build_files/post-build.sh) -- firmware for hardware the
-# server doesn't have (only Intel before 6th gen/Skylake: Haswell-era CPU,
-# i915 iGPU without firmware, e1000e NIC), kdump, NFS, Bluetooth, domain
-# join, cloud agents -- plus the CJK fonts osbuild's installer has (it runs
-# in English/Polish here). Before Anaconda: whatever it needs, its install
-# brings back.
-RUN remove=() \
-    && for p in amd-ucode-firmware amd-gpu-firmware intel-gpu-firmware nvidia-gpu-firmware \
-        realtek-firmware atheros-firmware brcmfmac-firmware cirrus-audio-firmware \
-        intel-audio-firmware iwlwifi-dvm-firmware iwlwifi-mvm-firmware iwlegacy-firmware \
-        libertas-firmware mt7xxx-firmware nxpwireless-firmware qcom-wwan-firmware \
-        tiwilink-firmware nfs-utils kdump-utils kexec-tools makedumpfile memstrack \
-        sssd-ad sssd-ipa sssd-krb5 sssd-ldap adcli \
-        WALinuxAgent-udev NetworkManager-cloud-setup cloud-utils-growpart \
-        toolbox flatpak-session-helper rpcbind gssproxy quota iptables-nft-services \
-        bluez bluez-hid2hci bluez-libs bluez-obexd NetworkManager-bluetooth \
-        google-noto-sans-cjk-fonts; do \
-        rpm -q "${p}" >/dev/null 2>&1 && remove+=("${p}"); \
-    done \
-    && if [ "${#remove[@]}" -gt 0 ]; then dnf -y remove "${remove[@]}"; fi \
-    && rpm -q NetworkManager linux-firmware microcode_ctl \
-    && dnf clean all
-
-# Anaconda, and what image-builder needs to build the ISO out of this.
+# Anaconda, and what image-builder needs to build the ISO out of this. No
+# google-noto-sans-cjk-fonts (osbuild's installer has them): it runs in
+# English/Polish here; Chinese/Japanese/Korean would show as boxes.
 RUN dnf -y install \
         anaconda \
         anaconda-install-img-deps \
@@ -54,14 +43,19 @@ RUN dnf -y install \
         squashfs-tools \
         fuse-overlayfs \
     && dnf clean all
+# The installer is all there (and which removed packages Anaconda brought
+# back: a warning only).
+RUN --mount=type=bind,source=build_files/remove-packages.sh,target=/tmp/remove-packages.sh \
+    bash /tmp/remove-packages.sh --check \
+        anaconda anaconda-install-img-deps anaconda-dracut grub2-efi-x64-cdboot
 
 # ISO label and boot menu (read by image-builder).
-COPY iso.yaml /usr/lib/image-builder/bootc/iso.yaml
+COPY iso/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 
 # What Anaconda installs and how; the installer only asks for the disk and
 # the network.
-COPY interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
-COPY anaconda.conf /etc/anaconda/conf.d/90-lm-server.conf
+COPY iso/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
+COPY iso/anaconda.conf /etc/anaconda/conf.d/90-lm-server.conf
 
 # What lorax normally does to make Anaconda run, the bare minimum: the
 # "install" user runs Anaconda, boot into anaconda.target, a shell on VT2.
@@ -74,10 +68,10 @@ RUN mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives \
     && rm -v /usr/lib/systemd/system-generators/systemd-gpt-auto-generator
 RUN rm /usr/lib/systemd/system/autovt@.service \
     && ln -s /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service
-COPY anaconda-shell.conf /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
+COPY iso/anaconda-shell.conf /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
 # The graphical installer runs as root; PipeWire refuses to otherwise.
-COPY pipewire-allowroot.conf /etc/systemd/user/pipewire.service.d/allowroot.conf
-COPY pipewire-allowroot.conf /etc/systemd/user/pipewire.socket.d/allowroot.conf
+COPY iso/pipewire-allowroot.conf /etc/systemd/user/pipewire.service.d/allowroot.conf
+COPY iso/pipewire-allowroot.conf /etc/systemd/user/pipewire.socket.d/allowroot.conf
 
 # Initramfs that boots into the installer.
 RUN kernel=$(kernel-install list --json pretty | jq -r '.[] | select(.has_kernel == true) | .version') \

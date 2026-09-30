@@ -64,7 +64,7 @@ jobs:
       - name: Build and push the installer container
         run: |
           set -euxo pipefail
-          sudo podman build --pull=newer --tag "${INSTALLER}" iso/
+          sudo podman build --pull=newer --tag "${INSTALLER}" -f iso/Containerfile .
           sudo podman push "${INSTALLER}"
 
       - name: Build ISO

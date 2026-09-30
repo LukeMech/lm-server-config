@@ -125,7 +125,7 @@ build-iso $target_image=("localhost/" + image_name) $tag=default_tag: (_rootful_
     # so the payload goes into the ISO under that name.
     payload="{{ registry }}/{{ image_name }}:latest"
     [[ "${target_image}:${tag}" == "${payload}" ]] || sudo podman tag "${target_image}:${tag}" "${payload}"
-    sudo podman build --pull=newer --tag localhost/lm-server-installer:latest iso/
+    sudo podman build --pull=newer --tag localhost/lm-server-installer:latest -f iso/Containerfile .
     mkdir -p output
     sudo podman run --rm -it --privileged --pull=newer \
       -v "$(pwd)/output:/output" \

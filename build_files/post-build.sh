@@ -1,86 +1,13 @@
 #!/bin/bash
 set -ouex pipefail
 
-# Firmware / tools for hardware a headless server doesn't have (Wi-Fi, WWAN,
-# Bluetooth, sound, GPUs, Realtek NICs), and features it doesn't use (below).
-# nfs-utils: nothing here mounts NFS (its rpc.statd only logs errors at boot).
-# The installer ISO drops the same packages (keep in sync: iso/Containerfile).
-REMOVE=(
-    # The server: Intel i5-4590 (Haswell) with its iGPU (i915) and an Intel
-    # NIC (e1000e) -- none of them loads firmware. Intel CPU microcode is
-    # microcode_ctl (stays). New hardware may need these back: AMD CPU/GPU,
-    # Intel iGPU from Skylake on (GuC/HuC/DMC), Realtek NICs (r8169, USB r8152).
-    amd-ucode-firmware
-    amd-gpu-firmware
-    intel-gpu-firmware
-    realtek-firmware
-    atheros-firmware
-    brcmfmac-firmware
-    cirrus-audio-firmware
-    intel-audio-firmware
-    iwlwifi-dvm-firmware
-    iwlwifi-mvm-firmware
-    iwlegacy-firmware
-    libertas-firmware
-    mt7xxx-firmware
-    nvidia-gpu-firmware
-    nxpwireless-firmware
-    qcom-wwan-firmware
-    tiwilink-firmware
-    nfs-utils
-    # No kdump (it can't find its dump target on bootc + btrfs, commit 536293a);
-    # almalinux-bootc ships it.
-    kdump-utils
-    kexec-tools
-    makedumpfile
-    memstrack
-    # Joining AD / FreeIPA / LDAP domains: local accounts only here.
-    sssd-ad
-    sssd-ipa
-    sssd-krb5
-    sssd-ldap
-    adcli
-    # Cloud VMs (Azure, cloud-init network, growing the root partition).
-    WALinuxAgent-udev
-    NetworkManager-cloud-setup
-    cloud-utils-growpart
-    # (clevis, LUKS unlocked by TPM, stays: almalinux-bootc's dracut config
-    # adds its module, so the initramfs rebuild below fails without it.)
-    # Desktop / NFS leftovers, the legacy iptables service (firewalld uses
-    # nftables). os-prober stays: grub2-tools requires it.
-    toolbox
-    flatpak-session-helper
-    rpcbind
-    gssproxy
-    quota
-    iptables-nft-services
-    # No Bluetooth on this server (the kernel modules are blocked in
-    # /usr/lib/modprobe.d/lm-server-no-bluetooth.conf).
-    bluez
-    bluez-hid2hci
-    bluez-libs
-    bluez-obexd
-    NetworkManager-bluetooth
-)
-installed=()
-for p in "${REMOVE[@]}"; do
-    rpm -q "${p}" &>/dev/null && installed+=("${p}")
-done
-((${#installed[@]})) && dnf -y remove "${installed[@]}"
-# dnf remove also removes whatever requires a removed package: fail the build
-# if that took anything the server needs.
-KEEP=(
-    qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install
-    edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged
-    cockpit-files podman bootc NetworkManager firewalld sudo sos dracut
-    grub2-efi-x64 shim-x64 linux-firmware microcode_ctl flashrom
-)
-for p in "${KEEP[@]}"; do
-    rpm -q "${p}" &>/dev/null || {
-        echo "error: '${p}' was removed along with REMOVE's packages" >&2
-        exit 1
-    }
-done
+# What the server needs, now that everything is installed (and which of
+# remove-packages.sh's removals came back): see remove-packages.sh --check.
+bash /ctx/remove-packages.sh --check \
+    qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install \
+    edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged \
+    cockpit-files firewalld sos
+
 # Nothing Bluetooth may come back through another package's dependencies.
 if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
     echo "error: Bluetooth packages in the image:" ${bt} >&2
