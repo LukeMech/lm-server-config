@@ -5,10 +5,11 @@
 # requires one just brings it back instead of dnf remove taking the installed
 # packages with it.
 #
-# remove-packages.sh --check [package...], once everything is installed
-# (post-build.sh, iso/Containerfile): warns about removed packages an install
-# brought back, fails if the base packages below (KEEP) or the given ones are
-# missing.
+# remove-packages.sh --check [package...] [--commands command...], once
+# everything is installed (post-build.sh, iso/Containerfile): the one "is it
+# all there" check -- warns about removed packages an install brought back,
+# fails if the base packages below (KEEP), the given packages or the given
+# commands are missing (listing all of them, not just the first).
 #
 # Hardware this leaves supported (the installer and the installed system
 # alike): Intel machines like lm-server -- i5-4590 (Haswell), its i915 iGPU
@@ -92,13 +93,26 @@ if [[ ${1:-} != --check ]]; then
 fi
 
 shift
+packages=("${KEEP[@]}")
+commands=()
+while (($#)); do
+    case "$1" in
+    --commands) shift && commands+=("$@") && break ;;
+    *) packages+=("$1") ;;
+    esac
+    shift
+done
+
 ((${#installed[@]})) &&
     echo "warning: back in the image through dependencies:" "${installed[@]}" >&2
 missing=()
-for p in "${KEEP[@]}" "$@"; do
-    rpm -q "${p}" &>/dev/null || missing+=("${p}")
+for p in "${packages[@]}"; do
+    rpm -q "${p}" &>/dev/null || missing+=("package ${p}")
+done
+for c in "${commands[@]}"; do
+    command -v "${c}" >/dev/null || missing+=("command ${c}")
 done
 if ((${#missing[@]})); then
-    echo "error: missing from the image:" "${missing[@]}" >&2
+    printf 'error: missing from the image: %s\n' "${missing[@]}" >&2
     exit 1
 fi
