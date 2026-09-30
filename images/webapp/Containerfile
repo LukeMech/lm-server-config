@@ -2,29 +2,28 @@
 # (toolbox, website, exp). No site code in the image: the entrypoint clones
 # APP_REPO at start (private repos with APP_GITHUB_TOKEN), keeps it pulled,
 # and restarts when a new commit lands.
-FROM quay.io/almalinuxorg/10-minimal:10
+# Docker Hub's official AlmaLinux image (quay.io has minimal only as a
+# separate repo, almalinuxorg/10-minimal).
+FROM docker.io/library/almalinux:10-minimal
 
 # From the system only the interpreter and non-Python tools: python3 (+ the
 # pip wheel `python3 -m venv` bootstraps from), git (the site repo),
 # findutils (entrypoint). Every Python package comes from pip (below).
 RUN microdnf -y install --setopt=install_weak_deps=0 --nodocs \
-        curl \
         findutils \
         git-core \
         python3 \
         python3-pip-wheel \
     && microdnf -y clean all
 
-# Emoji (flags too) in the rendercv CV: Typst picks up system fonts and
-# renders the COLRv1 glyphs in color. EL's google-noto-color-emoji-fonts is
-# older and has only the bitmap (CBDT) font, so the COLRv1 one comes from
-# the upstream release, checksum-pinned.
-ARG NOTO_EMOJI_VERSION=v2.051
-ARG NOTO_EMOJI_SHA256=0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2
-RUN mkdir -p /usr/share/fonts/noto-emoji \
-    && curl -fsSL -o /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf \
-        "https://github.com/googlefonts/noto-emoji/raw/${NOTO_EMOJI_VERSION}/fonts/Noto-COLRv1.ttf" \
-    && echo "${NOTO_EMOJI_SHA256}  /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf" | sha256sum -c -
+# Emoji (flags too) in the rendercv CV: Typst picks up system fonts. The
+# COLRv1 font (vector glyphs) from the upstream noto-emoji release -- EL's
+# google-noto-color-emoji-fonts has only the bitmap (CBDT) one, which Typst
+# embeds as images (much bigger, blurry PDFs).
+ADD --chmod=0644 \
+    --checksum=sha256:0ae57fe58645638523ba35f388d93739d292539a9acb84df5700c81b1e1a28d2 \
+    https://github.com/googlefonts/noto-emoji/raw/v2.051/fonts/Noto-COLRv1.ttf \
+    /usr/share/fonts/noto-emoji/Noto-COLRv1.ttf
 
 # Everything the sites need, in one venv -- one image for all of them,
 # nothing is installed per site at start (requirements.txt says what each
@@ -34,10 +33,19 @@ ENV VIRTUAL_ENV=/opt/venv \
 COPY requirements.txt /opt/lm-server-webapp/requirements.txt
 RUN python3 -m venv /opt/venv \
     && pip install --no-cache-dir --disable-pip-version-check -r /opt/lm-server-webapp/requirements.txt \
-    && python3 -c 'import flask, flask_babel, babel, gunicorn' \
-    && pybabel --version \
-    && rendercv --version \
-    && pdf-compressor --help >/dev/null
+    && pip check
+
+# Smoke test of what the sites run, beyond "it installed": the commands the
+# entrypoint and APP_BUILD_CMD call exist, and rendercv really renders a PDF
+# (Typst + fonts), the way exp renders the CV at every pull.
+RUN for cmd in gunicorn pybabel rendercv pdf-compressor git find; do \
+        command -v "${cmd}" >/dev/null || { echo "error: ${cmd} missing" >&2; exit 1; }; \
+    done \
+    && cd "$(mktemp -d)" \
+    && rendercv new "Smoke Test" >/dev/null \
+    && rendercv render Smoke_Test_CV.yaml -nomd -nohtml -nopng -pdf cv.pdf >/dev/null \
+    && test -s cv.pdf \
+    && rm -rf "${PWD}"
 
 COPY entrypoint.sh /usr/local/bin/lm-server-webapp
 RUN chmod 0755 /usr/local/bin/lm-server-webapp

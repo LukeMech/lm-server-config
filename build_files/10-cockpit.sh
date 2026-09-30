@@ -7,7 +7,7 @@
 #
 # Network, SELinux and the performance profile (tuned) pages are part of
 # cockpit-system on EL (it provides cockpit-networkmanager, cockpit-selinux,
-# cockpit-tuned); post-build.sh checks they're there.
+# cockpit-tuned).
 set -ouex pipefail
 
 dnf -y install \

@@ -45,12 +45,7 @@ dnf -y install \
     `# when running as a VM (Proxmox shows the IP, clean shutdown); idle on bare metal` \
     qemu-guest-agent
 
-# The first-boot prompt (lm-server-firstboot.service) is on /dev/tty1: plain
-# kernel VT + getty. (Never kmscon: it draws its own terminals, so the prompt
-# would never be visible.)
-if rpm -q kmscon >/dev/null 2>&1; then
-    dnf -y remove kmscon
-fi
+# The first-boot prompt (lm-server-firstboot.service) is on /dev/tty1.
 systemctl enable getty@tty1.service
 
 systemctl enable sshd.service NetworkManager.service podman.socket

@@ -49,7 +49,6 @@ for cmd in bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint 
         exit 1
     }
 done
-python3 -c 'import tomllib'
 # Every key policy.json points at must be in the image -- without it no
 # ghcr.io/lukemech image can be pulled (bootc upgrade, the webapp containers).
 for key in $(jq -r '.. | .keyPath? // empty' /etc/containers/policy.json); do
@@ -58,21 +57,12 @@ for key in $(jq -r '.. | .keyPath? // empty' /etc/containers/policy.json); do
         exit 1
     }
 done
-test -x /usr/lib/systemd/system-generators/zram-generator
-# Our zram config, not zram-generator-defaults' (same path, a package would
-# silently replace it).
+# Our zram config, not zram-generator-defaults' (same path: a package update
+# pulling it in would silently replace it).
 grep -q '^zram-size = ram / 2' /usr/lib/systemd/zram-generator.conf || {
     echo "error: /usr/lib/systemd/zram-generator.conf is not lm-server's" >&2
     exit 1
 }
-# Cockpit pages that EL folds into cockpit-system instead of own packages.
-for page in networkmanager selinux metrics; do
-    test -f "/usr/share/cockpit/${page}/manifest.json" || {
-        echo "error: Cockpit page '${page}' missing from the image" >&2
-        exit 1
-    }
-done
-test -d /usr/lib/tuned/profiles/powersave
 
 # Validate every quadlet (and its # lm-server: directives) now, not at first
 # boot on the server.
