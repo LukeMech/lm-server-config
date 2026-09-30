@@ -9,10 +9,7 @@ export image_desc := env_var("IMAGE_DESC")
 export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
-export bib_image := env_var("BIB_IMAGE")
 export image_builder_image := env_var("IMAGE_BUILDER_IMAGE")
-
-alias build-vm := build-qcow2
 
 [private]
 default:
@@ -105,7 +102,7 @@ generate-build-tags $tag=default_tag:
     fi
     echo "${BUILD_TAGS[@]}"
 
-# Copies a user-podman image into root's storage (bootc-image-builder runs rootful)
+# Copies a user-podman image into root's storage (image-builder runs rootful)
 _rootful_load_image $target_image $tag:
     #!/usr/bin/env bash
     set -eoux pipefail
@@ -117,22 +114,6 @@ _rootful_load_image $target_image $tag:
     else
         sudo podman pull "${target_image}:${tag}"
     fi
-
-# bootc-image-builder: <type> is qcow2 | raw
-_build-bib $target_image $tag $type $config: (_rootful_load_image target_image tag)
-    #!/usr/bin/env bash
-    set -euo pipefail
-    BUILDTMP=$(mktemp -p "${PWD}" -d -t _build-bib.XXXXXXXXXX)
-    sudo podman run --rm -it --privileged --pull=newer --net=host \
-      --security-opt label=type:unconfined_t \
-      -v "$(pwd)/${config}:/config.toml:ro" \
-      -v "${BUILDTMP}:/output" \
-      -v /var/lib/containers/storage:/var/lib/containers/storage \
-      "${bib_image}" --type "${type}" --use-librepo=True "${target_image}:${tag}"
-    mkdir -p output
-    sudo mv -f "${BUILDTMP}"/* output/
-    sudo rmdir "${BUILDTMP}"
-    sudo chown -R "${USER}:${USER}" output/
 
 # Installer ISO (from the local image, or from GHCR with target_image=ghcr.io/lukemech/lm-server):
 # image-builder's bootc-generic-iso, the installer environment is iso/Containerfile
@@ -155,27 +136,6 @@ build-iso $target_image=("localhost/" + image_name) $tag=default_tag: (_rootful_
       --bootc-installer-payload-ref "${payload}" \
       bootc-generic-iso
     sudo chown -R "${USER}:${USER}" output/
-
-# QCOW2 for testing in a VM
-[group('Disk images')]
-build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "disk_config/disk.toml")
-
-# Boot the qcow2 in a throwaway VM (web console on http://localhost:8006+)
-[group('Disk images')]
-run-vm $target_image=("localhost/" + image_name) $tag=default_tag:
-    #!/usr/bin/env bash
-    set -eoux pipefail
-    image_file="output/qcow2/disk.qcow2"
-    [[ -f "${image_file}" ]] || just build-qcow2 "${target_image}" "${tag}"
-    port=8006
-    while grep -q ":${port}" <<< "$(ss -tunalp)"; do port=$(( port + 1 )); done
-    echo "Connect to http://localhost:${port}"
-    podman run --rm --privileged --pull=newer \
-      --publish "127.0.0.1:${port}:8006" \
-      --env "CPU_CORES=4" --env "RAM_SIZE=8G" --env "DISK_SIZE=64G" \
-      --device=/dev/kvm \
-      --volume "${PWD}/${image_file}:/boot.qcow2" \
-      docker.io/qemux/qemu
 
 # shellcheck every script (incl. the extension-less ones in system_files)
 lint:

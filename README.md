@@ -270,9 +270,12 @@ Only the host's architecture: AlmaLinux ships no QEMU for other architectures
 
 ## First install
 
-1. Download `lm-server-<tag>.iso` from the latest release. If it was split
-   (>2 GB), join it with `cat lm-server-*.iso.part-* > lm-server.iso`, then check
-   it against the `.sha256`.
+1. Download `lm-server-<tag>.iso` and its `.sha256` from the latest release.
+   An ISO of 2 GiB or more is attached in parts: join them under the original
+   name, `cat lm-server-<tag>.iso.part-* > lm-server-<tag>.iso` (Windows:
+   `copy /b <part-00> + <part-01> lm-server-<tag>.iso`), then
+   `sha256sum -c lm-server-<tag>.iso.sha256`. The release notes have the
+   exact commands.
 2. The installer only asks for the system disk and the network (a static IP).
    Timezone, hostname and accounts all come from the config.
 3. After the reboot, tty1 asks for the secrets repo (no login needed):
@@ -317,7 +320,6 @@ system_files/                          copied onto / of the system image
 images/webapp/                         our own service image
 iso/                                   installer ISO: Anaconda as a bootable container
                                        (+ kickstart), built with image-builder
-disk_config/                           bootc-image-builder config (qcow2 for VM tests)
 lm-server-config-secrets/                     TEMPLATE of the private secrets repo
 scripts/                               release changelog helpers (from immutable-sbc)
 ```
@@ -332,7 +334,7 @@ The repo secret **`SIGNING_SECRET`** is required: the cosign key matching
 `system_files/etc/pki/containers/lukemech-cosign.pub`. The server refuses unsigned
 `ghcr.io/lukemech/*` images.
 
-Local: `just build`, `just build-image webapp`, `just build-iso`, `just build-qcow2 && just run-vm`.
+Local: `just build`, `just build-image webapp`, `just build-iso`.
 
 ### Adding a service
 

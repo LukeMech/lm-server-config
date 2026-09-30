@@ -195,6 +195,8 @@ jobs:
           path: changelog-artifacts
 
       - name: Generate changelog
+        env:
+          TAG: ${{ steps.release-tag.outputs.tag }}
         run: |
           set -euo pipefail
           if [[ -f changelog-artifacts/package-changelog.md ]]; then
@@ -211,11 +213,48 @@ jobs:
             else
               git log --pretty='- %h %s' -1
             fi
-            echo
-            echo "## Install / update"
-            echo
-            echo "- New server: boot the attached ISO."
-            echo "- Existing server: \`sudo lm-server upgrade --apply\` (or Cockpit > lm-server)."
+            ISO="lm-server-${TAG}.iso"
+            README="${{ github.server_url }}/${{ github.repository }}/blob/${TAG}/README.md"
+            # build-iso.yml splits an ISO of 2 GiB or more into .part-NN files.
+            cat <<EOF
+
+          ## Update an existing server
+
+          Cockpit > **Management** > update the system image, or from a shell:
+          \`sudo lm-server upgrade\` (staged, applied on the next reboot) /
+          \`sudo lm-server upgrade --apply\` (download and reboot now).
+          If the new image misbehaves: \`sudo lm-server rollback\`.
+
+          ## Install a new server
+
+          1. Download \`${ISO}\` (or its parts, see below) and \`${ISO}.sha256\`,
+             write the ISO to a USB stick and boot it.
+          2. The installer asks only for the system disk and the network.
+          3. After the reboot, tty1 asks for the secrets repo (owner/name, branch,
+             config path, GitHub user and a fine-grained token with *Contents: read-only*).
+             The admin account, services and the rest come from \`lm-server.toml\`.
+
+          Details: [First install](${README}#first-install).
+
+          ### ISO in parts
+
+          If the ISO is attached as \`${ISO}.part-00\`, \`.part-01\`, ... (GitHub caps
+          release files at 2 GiB), download all parts and the \`.sha256\` into one folder,
+          join them and check the result:
+
+          Linux / macOS:
+          \`\`\`sh
+          cat ${ISO}.part-* > ${ISO}
+          sha256sum -c ${ISO}.sha256      # macOS: shasum -a 256 -c ${ISO}.sha256
+          \`\`\`
+
+          Windows (cmd):
+          \`\`\`bat
+          copy /b ${ISO}.part-00 + ${ISO}.part-01 ${ISO}
+          certutil -hashfile ${ISO} SHA256
+          \`\`\`
+          (add \`+ ${ISO}.part-02\` etc. if there are more parts; compare the hash with the \`.sha256\` file)
+          EOF
           } >> changelog.md
 
       - name: Create release tag

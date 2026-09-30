@@ -75,7 +75,9 @@ jobs:
           bootc_installer_payload_ref: ${{ env.IMAGE }}
 
       # GitHub release assets are capped at 2 GiB: a bigger ISO is split into
-      # parts (join with `cat lm-server-*.iso.part-* > lm-server.iso`).
+      # parts (join under the original name, so the .sha256 checks it:
+      # `cat lm-server-<tag>.iso.part-* > lm-server-<tag>.iso`; build.yml's
+      # release notes have the commands).
       - name: Prepare release files
         id: files
         env:
@@ -90,8 +92,8 @@ jobs:
           sudo mv "${ISO}" "dist/${NAME}"
           sudo chown "$(id -u):$(id -g)" "dist/${NAME}"
           (cd dist && sha256sum "${NAME}" > "${NAME}.sha256")
-          if (( $(stat -c %s "dist/${NAME}") > 2000000000 )); then
-            (cd dist && split -b 1900M -d -a 2 "${NAME}" "${NAME}.part-" && rm -f "${NAME}")
+          if (( $(stat -c %s "dist/${NAME}") >= 2147483648 )); then
+            (cd dist && split -b 2000M -d -a 2 "${NAME}" "${NAME}.part-" && rm -f "${NAME}")
           fi
           ls -la dist
 
