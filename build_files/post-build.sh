@@ -2,10 +2,17 @@
 set -ouex pipefail
 
 # Firmware / tools for hardware a headless server doesn't have (Wi-Fi, WWAN,
-# Bluetooth, sound, NVIDIA), and features it doesn't use (below). Kept: CPU
-# microcode, GPU firmware for iGPUs, realtek-firmware (r8169 Ethernet).
+# Bluetooth, sound, GPUs, Realtek NICs), and features it doesn't use (below).
 # nfs-utils: nothing here mounts NFS (its rpc.statd only logs errors at boot).
 REMOVE=(
+    # The server: Intel i5-4590 (Haswell) with its iGPU (i915) and an Intel
+    # NIC (e1000e) -- none of them loads firmware. Intel CPU microcode is
+    # microcode_ctl (stays). New hardware may need these back: AMD CPU/GPU,
+    # Intel iGPU from Skylake on (GuC/HuC/DMC), Realtek NICs (r8169, USB r8152).
+    amd-ucode-firmware
+    amd-gpu-firmware
+    intel-gpu-firmware
+    realtek-firmware
     atheros-firmware
     brcmfmac-firmware
     cirrus-audio-firmware
@@ -44,11 +51,10 @@ REMOVE=(
     clevis-systemd
     luksmeta
     jose
-    # Desktop / dual-boot / NFS leftovers, the legacy iptables service
-    # (firewalld uses nftables).
+    # Desktop / NFS leftovers, the legacy iptables service (firewalld uses
+    # nftables). os-prober stays: grub2-tools requires it.
     toolbox
     flatpak-session-helper
-    os-prober
     rpcbind
     gssproxy
     quota
@@ -106,12 +112,12 @@ for key in $(jq -r '.. | .keyPath? // empty' /etc/containers/policy.json); do
         exit 1
     }
 done
-# Our zram config, not zram-generator-defaults' (same path: a package update
-# pulling it in would silently replace it).
-grep -q '^zram-size = ram / 2' /usr/lib/systemd/zram-generator.conf || {
-    echo "error: /usr/lib/systemd/zram-generator.conf is not lm-server's" >&2
+# zram-generator-defaults ships the same /usr/lib/systemd/zram-generator.conf
+# as ours and would silently replace it.
+if rpm -q zram-generator-defaults &>/dev/null; then
+    echo "error: zram-generator-defaults is installed (it replaces our zram-generator.conf)" >&2
     exit 1
-}
+fi
 
 # Validate every quadlet (and its # lm-server: directives) now, not at first
 # boot on the server.
