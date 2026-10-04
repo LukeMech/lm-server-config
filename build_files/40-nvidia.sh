@@ -44,6 +44,18 @@ fi
 dnf -y remove akmods akmod-nvidia-580xx xorg-x11-drv-nvidia-580xx-kmodsrc "kernel-devel-${kver}"
 dnf -y remove rpmfusion-nonfree-release rpmfusion-free-release epel-release
 
+# The card for containers ([immich] gpu = "nvidia"): podman hands it over
+# through CDI. nvidia-container-toolkit-base alone (nvidia-ctk, no runtime
+# hook -- podman reads CDI itself), from NVIDIA's repo; nvidia-cdi-refresh
+# writes /run/cdi/nvidia.yaml at every boot (lm-server's drop-in: only with
+# an NVIDIA card in the machine).
+curl -fsSL -o /etc/yum.repos.d/nvidia-container-toolkit.repo \
+    https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+dnf -y install nvidia-container-toolkit-base
+rm -f /etc/yum.repos.d/nvidia-container-toolkit.repo
+systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
+
 depmod -a "${kver}"
 modinfo -k "${kver}" -F version nvidia
-rpm -q "kmod-nvidia-580xx-${kver}" xorg-x11-drv-nvidia-580xx xorg-x11-drv-nvidia-580xx-cuda
+rpm -q "kmod-nvidia-580xx-${kver}" xorg-x11-drv-nvidia-580xx xorg-x11-drv-nvidia-580xx-cuda \
+    nvidia-container-toolkit-base

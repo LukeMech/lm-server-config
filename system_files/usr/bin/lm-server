@@ -387,6 +387,7 @@ apply_service() {
             rm -f "${dst}/enabled"
             sync_changed "${svc}"
         fi
+        apply_quadlets "${svc}" "${src}"
         return 0
     fi
     if ((!force)) && lms_enabled "${svc}" && [[ $(lms_dir_hash "${src}") == "$(lms_dir_hash "${dst}")" ]]; then
@@ -397,6 +398,7 @@ apply_service() {
     # it keeps running as it was (or stays off); the next sync tries again.
     apply_storage "${svc}" "${src}"
     apply_limits "${svc}" "${src}"
+    apply_quadlets "${svc}" "${src}"
     rm -rf "${dst}"
     mv "${src}" "${dst}"
     touch "${dst}/enabled"
@@ -692,6 +694,33 @@ apply_limits() {
     ((${#props[@]})) || return 0
     systemctl set-property "lm-server-$1.slice" "${props[@]}" ||
         lms_log "$1: could not apply limits (${props[*]})"
+}
+
+# apply_quadlets <svc> <rendered-dir>: the service's rendered quadlet/<unit>.conf
+# as drop-ins, /etc/containers/systemd/<unit>.d/lm-server-<svc>.conf (e.g.
+# [immich] gpu); ones it no longer renders are removed. Quadlet reads them
+# at daemon-reload, before apply_service restarts the service.
+apply_quadlets() {
+    local svc=$1 src=$2 f unit dropin reload=0
+    local -A want=()
+    if [[ -d ${src}/quadlet ]]; then
+        for f in "${src}"/quadlet/*.conf; do
+            [[ -f ${f} ]] || continue
+            unit=$(basename "${f}" .conf)
+            dropin="/etc/containers/systemd/${unit}.d/lm-server-${svc}.conf"
+            want[${dropin}]=1
+            cmp -s "${f}" "${dropin}" && continue
+            install -D -m 0644 "${f}" "${dropin}"
+            reload=1
+        done
+    fi
+    for dropin in /etc/containers/systemd/*.d/lm-server-"${svc}".conf; do
+        [[ -f ${dropin} && -z ${want[${dropin}]:-} ]] || continue
+        rm -f "${dropin}"
+        rmdir --ignore-fail-on-non-empty "${dropin%/*}"
+        reload=1
+    done
+    ((!reload)) || systemctl daemon-reload
 }
 
 cmd_start_enabled() {

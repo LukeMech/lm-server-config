@@ -133,6 +133,28 @@ is no longer needed:
 `sudo rm -r /etc/systemd/system/ostree-finalize-staged.service.d`.
 `lm-server rollback` still goes back to Fedora.
 
+## NVIDIA GPU
+
+The image carries NVIDIA's driver for the X99 machine's GTX 1050 (Pascal):
+the proprietary 580 branch from RPM Fusion, the last one with Pascal, its
+kernel module built for the image's kernel at build time
+([build_files/40-nvidia.sh](build_files/40-nvidia.sh)). On a machine without
+an NVIDIA card it never loads. `nvidia-smi` shows the card.
+
+Containers get it through CDI: `nvidia-cdi-refresh` writes `/run/cdi/nvidia.yaml`
+at every boot (only with the card present) and lets containers use
+`/dev/nvidia*` (SELinux boolean `container_use_xserver_devices`). For Immich:
+
+```toml
+[immich]
+gpu = "nvidia"   # machine learning on CUDA, the server for NVENC transcoding
+```
+
+Machine learning switches to its `-cuda` image. Transcoding on the card is
+switched on in Immich itself: Administration > Video Transcoding > Hardware
+Acceleration > NVENC. With `gpu` set on a machine without the card, Immich
+won't start.
+
 ## Disks
 
 Every service keeps all of its data in one folder,

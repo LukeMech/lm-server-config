@@ -117,6 +117,10 @@ db_password = "CHANGE_ME" # letters and digits only
 admin = { email = "you@example.com", password = "CHANGE_ME", name = "Admin" }
 # users = [ { email = "family@example.com", password = "CHANGE_ME", name = "Family" } ]
 env = { TZ = "Europe/Warsaw" }
+# The NVIDIA card (X99 machine only -- without one Immich won't start):
+# machine learning on CUDA, the server for NVENC transcoding (switch that on
+# in Immich > Administration > Video Transcoding > Hardware Acceleration).
+# gpu = "nvidia"
 
 [remote]
 storage = "2G"

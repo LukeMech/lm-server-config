@@ -30,6 +30,10 @@ With no custom renderer below, [<name>] in lm-server.toml renders to
 env/<name>/<name>.env (point the quadlet's EnvironmentFile= there):
 `env` defaults < top-level keys (api_secret -> API_SECRET) < `env = {...}`;
 `users = [...]` goes to env/<name>/users.json for provision/<name>.sh.
+
+A renderer may also write quadlet/<unit>.conf (e.g. immich-server.container.conf):
+lm-server installs it as a drop-in of that quadlet,
+/etc/containers/systemd/<unit>.d/lm-server-<service>.conf.
 """
 
 import json
@@ -371,6 +375,26 @@ def r_immich(name, spec, sec, out, ctx):
         need(admin, field, f"{name}.admin")
     out.json("admin.json", {"email": admin["email"], "password": admin["password"], "name": admin.get("name", "Admin")})
     out.json("users.json", users(sec, name, ["email", "password"]))
+    gpu = sec.get("gpu")
+    if gpu is not None:
+        if gpu != "nvidia":
+            raise ConfigError(f"{name}.gpu: only \"nvidia\" (or leave it out for the CPU; got '{gpu}')")
+        # The card through CDI (/run/cdi/nvidia.yaml, from nvidia-cdi-refresh
+        # at boot): machine learning on CUDA (its -cuda image), the server for
+        # NVENC video transcoding (Immich > Administration > Video Transcoding
+        # > Hardware Acceleration: NVENC).
+        cdi = (
+            "[Unit]\n"
+            "Wants=nvidia-cdi-refresh.service\n"
+            "After=nvidia-cdi-refresh.service\n\n"
+            "[Container]\n"
+            "AddDevice=nvidia.com/gpu=all\n"
+        )
+        out.write(
+            "quadlet/immich-machine-learning.container.conf",
+            cdi + "Image=ghcr.io/immich-app/immich-machine-learning:release-cuda\n",
+        )
+        out.write("quadlet/immich-server.container.conf", cdi)
 
 
 def r_remote(name, spec, sec, out, ctx):

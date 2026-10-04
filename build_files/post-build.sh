@@ -15,7 +15,7 @@ bash /ctx/remove-packages.sh --check \
     systemd-escape flock base64 sha256sum od useradd usermod getent timedatectl \
     hostnamectl systemd-analyze firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
-    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi
+    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi nvidia-ctk
 
 kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
 
