@@ -27,11 +27,9 @@ curl -fsSL -o /etc/yum.repos.d/cuda.repo \
     "https://developer.download.nvidia.com/compute/cuda/repos/rhel${el}/x86_64/cuda-rhel${el}.repo"
 curl -fsSL -o /etc/yum.repos.d/nvidia-container-toolkit.repo \
     https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
-# Their package signing keys up front; the toolkit repo's signed metadata
-# (repo_gpgcheck) takes -y on the first dnf call to import its key -- dnf
-# would otherwise ask, nothing answers here, and the repo fails to load.
-rpm --import "https://developer.download.nvidia.com/compute/cuda/repos/rhel${el}/x86_64/CDF6BA43.pub"
-rpm --import https://nvidia.github.io/libnvidia-container/gpgkey
+# -y on every dnf call, the first included: it imports the repos' keys
+# (the toolkit repo signs its metadata too) -- without it dnf asks, nothing
+# answers here, and the repo fails to load.
 
 ver=$(dnf -y -q repoquery --qf '%{VERSION}\n' nvidia-driver-cuda | grep '^580\.' | sort -V | tail -1)
 [[ -n ${ver} ]] || {
