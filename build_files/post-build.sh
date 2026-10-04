@@ -17,7 +17,10 @@ bash /ctx/remove-packages.sh --check \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
     pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi nvidia-ctk
 
-kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
+# The kernel's version from its package, not from /usr/lib/modules: that can
+# hold more directories than the kernel's own (a kABI-tracking kmod installs
+# into one of the kABI base version, e.g. 6.12.0-211.el10_2.x86_64).
+kver=$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)
 
 # Still only the deps image's kernel (00-pre-build.sh) -- nothing installed
 # since brought another one along, which the NVIDIA kmod wouldn't match.
