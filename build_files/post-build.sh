@@ -9,13 +9,24 @@ set -ouex pipefail
 bash /ctx/remove-packages.sh --check \
     qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install \
     edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged \
-    cockpit-files firewalld sos \
+    cockpit-files firewalld sos xorg-x11-drv-nvidia-580xx \
     --commands \
     bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint \
     systemd-escape flock base64 sha256sum od useradd usermod getent timedatectl \
     hostnamectl systemd-analyze firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
-    pminfo tuned-adm semodule semanage setsebool restorecon
+    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi
+
+kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
+
+# Kernel modules for both machines' hardware (remove-packages.sh): NICs,
+# GPUs, CPU temperatures.
+for module in e1000e igb r8169 i915 nvidia nvidia-drm coretemp; do
+    modinfo -k "${kver}" -F filename "${module}" >/dev/null || {
+        echo "error: kernel module ${module} missing from the image" >&2
+        exit 1
+    }
+done
 
 # Nothing Bluetooth may come back through another package's dependencies.
 if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
@@ -45,7 +56,6 @@ fi
 
 # Rebuild the initramfs: it carries its own copy of os-release (initrd-release),
 # so without this the initrd still prints "Welcome to AlmaLinux".
-kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
 DRACUT_NO_XATTR=1 dracut --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree -f \
     "/usr/lib/modules/${kver}/initramfs.img"
 chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"
