@@ -1,6 +1,6 @@
 #!/bin/bash
-# First hook of the build (before 01-system-files.sh): the dnf setup, the
-# removal of unused base packages, then the packages lm-server relies on.
+# First hook of the build: the dnf setup, the removal of unused base
+# packages, system_files/, then the packages lm-server relies on.
 set -ouex pipefail
 
 # Never install weak dependencies (Recommends/Supplements).
@@ -10,6 +10,10 @@ grep -q '^install_weak_deps' /etc/dnf/dnf.conf ||
 ### Base packages lm-server has no use for, before anything is installed
 # (see remove-packages.sh).
 bash /ctx/remove-packages.sh
+
+# Ours only after that removal: dnf remove would delete our files at a
+# removed package's paths.
+cp -avf /ctx/system_files/. /
 
 # Everything lm-server itself relies on, listed explicitly -- even what
 # almalinux-bootc ships today -- so a base-image change can't silently drop it.
