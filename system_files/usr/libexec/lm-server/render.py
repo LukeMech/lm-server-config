@@ -36,6 +36,7 @@ lm-server installs it as a drop-in of that quadlet,
 /etc/containers/systemd/<unit>.d/lm-server-<service>.conf.
 """
 
+import glob
 import json
 import os
 import posixpath
@@ -376,9 +377,15 @@ def r_immich(name, spec, sec, out, ctx):
     out.json("admin.json", {"email": admin["email"], "password": admin["password"], "name": admin.get("name", "Admin")})
     out.json("users.json", users(sec, name, ["email", "password"]))
     gpu = sec.get("gpu")
-    if gpu is not None:
-        if gpu != "nvidia":
-            raise ConfigError(f"{name}.gpu: only \"nvidia\" (or leave it out for the CPU; got '{gpu}')")
+    if gpu is not None and gpu != "nvidia":
+        raise ConfigError(f"{name}.gpu: only \"nvidia\" (or leave it out for the CPU; got '{gpu}')")
+    # Only where the card can be handed over: on a machine without one, or an
+    # image without its driver, Immich runs on the CPU as if gpu weren't set
+    # (a CDI device that doesn't exist would keep its containers from starting).
+    if gpu and not CHECK_ONLY and not nvidia_card():
+        print(f"warning: {name}.gpu = \"nvidia\": no NVIDIA card or driver here -- running on the CPU", file=sys.stderr)
+        gpu = None
+    if gpu:
         # The card through CDI (/run/cdi/nvidia.yaml, from nvidia-cdi-refresh
         # at boot): machine learning on CUDA (its -cuda image), the server for
         # NVENC video transcoding (Immich > Administration > Video Transcoding
@@ -395,6 +402,21 @@ def r_immich(name, spec, sec, out, ctx):
             cdi + "Image=ghcr.io/immich-app/immich-machine-learning:release-cuda\n",
         )
         out.write("quadlet/immich-server.container.conf", cdi)
+
+
+def nvidia_card():
+    """An NVIDIA card in the machine (PCI vendor 0x10de) and its driver in the
+    image (nvidia-ctk, for the CDI spec): what `gpu = "nvidia"` needs."""
+    if not shutil.which("nvidia-ctk"):
+        return False
+    for vendor in glob.glob("/sys/bus/pci/devices/*/vendor"):
+        try:
+            with open(vendor, encoding="ascii") as f:
+                if f.read().strip() == "0x10de":
+                    return True
+        except OSError:
+            pass
+    return False
 
 
 def r_remote(name, spec, sec, out, ctx):
