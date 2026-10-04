@@ -72,7 +72,19 @@ root=$(mktemp -d)
 moddir="${root}/usr/lib/modules/${kver}/extra/nvidia"
 install -d "${moddir}"
 install -m 0644 "${built}"/*.ko* "${moddir}/"
-ls "${moddir}"/nvidia.ko* >/dev/null
+# As the kernel's own modules: without debug symbols, xz-compressed (dkms
+# leaves them plain, with symbols: several times the size).
+shopt -s nullglob
+for ko in "${moddir}"/*.ko; do
+    strip --strip-debug "${ko}"
+    xz --check=crc32 --lzma2=dict=1MiB "${ko}"
+done
+shopt -u nullglob
+ls "${moddir}"/nvidia.ko.xz >/dev/null
+du -sh "${moddir}"
+# Release: 1.<kernel> without its arch; no "-" allowed there.
+release=1.${kver%.*}
+release=${release//-/_}
 spec=$(mktemp --suffix=.spec)
 cat >"${spec}" <<EOF
 %global debug_package %{nil}
@@ -80,7 +92,7 @@ cat >"${spec}" <<EOF
 
 Name: kmod-nvidia
 Version: ${ver}
-Release: 1.${kver//-/_}
+Release: ${release}
 Summary: NVIDIA ${ver} closed kernel modules for ${kver}
 License: NVIDIA
 Provides: nvidia-kmod = ${ver}
