@@ -86,9 +86,9 @@ du -sh "${moddir}"
 # <epoch>:<version> -- without it ours would be 0:..., too old.
 epoch=$(rpm -qp --qf '%{EPOCH}' /rpms/nvidia/nvidia-kmod-common-[0-9]*.rpm)
 [[ ${epoch} =~ ^[0-9]+$ ]] || epoch=0
-# Release: 1.<kernel> without its arch; no "-" allowed there.
-release=1.${kver%.*}
-release=${release//-/_}
+# Versioned like the driver alone (as immutable-sbc's kmods): a new kernel
+# rebuilds it anyway (Requires pins it), and the image's changelog shows a
+# kmod update only when the driver changes.
 spec=$(mktemp --suffix=.spec)
 cat >"${spec}" <<EOF
 %global debug_package %{nil}
@@ -96,7 +96,7 @@ cat >"${spec}" <<EOF
 
 Name: kmod-nvidia
 Version: ${ver}
-Release: ${release}
+Release: 1
 Summary: NVIDIA ${ver} closed kernel modules for ${kver}
 License: NVIDIA
 Provides: nvidia-kmod = ${epoch}:${ver}
