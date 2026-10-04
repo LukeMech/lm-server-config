@@ -1,6 +1,7 @@
 #!/bin/bash
-# First thing in the build (build.sh runs it before everything else): the dnf setup, the kernel swap, the
-# removal of unused base packages, then the packages lm-server relies on.
+# First hook of the build (before 01-system-files.sh): the dnf setup, the
+# kernel swap, the removal of unused base packages, then the packages
+# lm-server relies on.
 set -ouex pipefail
 
 # Never install weak dependencies (Recommends/Supplements).
