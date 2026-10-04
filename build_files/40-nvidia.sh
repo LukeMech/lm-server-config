@@ -25,5 +25,10 @@ systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
 # /usr/lib/modules/<kver>/weak-updates/, the RPM owns the file it points to.
 module=$(modinfo -k "${kver}" -F filename nvidia)
 rpm -qf "$(readlink -f "${module}")"
+# Prebuilt only: nothing that would compile a module on the server.
+if tooling=$(rpm -qa 'akmod*' 'kernel-devel*' | grep .); then
+    echo "error: kmod build tooling in the image:" ${tooling} >&2
+    exit 1
+fi
 [[ $(modinfo -k "${kver}" -F version nvidia) == "$(</deps-rpms/NVIDIA)" ]]
 [[ $(rpm -q --qf '%{VERSION}' xorg-x11-drv-nvidia-580xx) == "$(</deps-rpms/NVIDIA)" ]]

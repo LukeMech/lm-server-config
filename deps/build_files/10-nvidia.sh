@@ -29,13 +29,20 @@ curl -fsSL -o /etc/yum.repos.d/nvidia-container-toolkit.repo \
 # Userspace, with its dependencies -- before anything NVIDIA is installed
 # here, or --resolve would skip what's already installed. Only what isn't
 # AlmaLinux's own is kept; the system image gets the rest from its repos.
-# -cuda: nvidia-smi, CUDA/NVENC for containers.
+# -cuda: nvidia-smi, CUDA/NVENC for containers. No weak dependencies (the
+# system image installs none either). The driver's nvidia-580xx-kmod is
+# resolved here to akmod-nvidia-580xx and its build tooling -- dropped: the
+# kmod built below provides it (akmods.service would try to compile at boot).
 dl=$(mktemp -d)
-dnf -y download --resolve --destdir "${dl}" \
+dnf -y download --resolve --setopt=install_weak_deps=False --destdir "${dl}" \
     xorg-x11-drv-nvidia-580xx-cuda \
     nvidia-container-toolkit-base
 for rpm in "${dl}"/*.rpm; do
-    [[ $(rpm -qp --qf '%{VENDOR}' "${rpm}") == AlmaLinux* ]] || cp "${rpm}" /rpms/nvidia/
+    [[ $(rpm -qp --qf '%{VENDOR}' "${rpm}") == AlmaLinux* ]] && continue
+    case $(rpm -qp --qf '%{NAME}' "${rpm}") in
+    akmod-* | akmods | kmodtool | *-kmodsrc | python3-rpmautospec*) continue ;;
+    esac
+    cp "${rpm}" /rpms/nvidia/
 done
 
 # The kmod, against kernel-devel-<kver> (00-kernel.sh): akmodsbuild, called

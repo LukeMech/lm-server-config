@@ -46,6 +46,19 @@ jobs:
       - name: Build deps image
         run: podman build --pull=newer --tag "${IMAGE_NAME}:${DEFAULT_TAG}" --file deps/Containerfile deps
 
+      # A second tag naming what's inside, <kernel>-<driver>
+      # (6.12.0-211.56.1.el10_2.x86_64-580.178.04). The image is FROM scratch
+      # (nothing to run): its version files are copied out of a created container.
+      - name: Read the kernel and driver versions
+        id: versions
+        run: |
+          set -euo pipefail
+          cid=$(podman create "${IMAGE_NAME}:${DEFAULT_TAG}" true)
+          KVER=$(podman cp "${cid}:/rpms/KVER" - | tar -xO)
+          NVIDIA=$(podman cp "${cid}:/rpms/NVIDIA" - | tar -xO)
+          podman rm -f "${cid}" >/dev/null
+          echo "tag=${KVER}-${NVIDIA}" >> "$GITHUB_OUTPUT"
+
       # A scheduled run publishes only if the kernel or the driver moved. The
       # image is FROM scratch (nothing to run): its two version files are
       # copied out of a created container.
@@ -86,4 +99,10 @@ jobs:
       # at build.yml's build time.
       - name: Push to GHCR
         if: github.event_name != 'schedule' || steps.check-changes.outputs.changed == 'true'
-        run: podman push "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+        env:
+          VERSION_TAG: ${{ steps.versions.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for tag in "${DEFAULT_TAG}" "${VERSION_TAG}"; do
+            podman push "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+          done
