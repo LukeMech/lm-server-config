@@ -28,48 +28,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Same as immutable-sbc: a push touching deps/ starts build-deps.yml too,
-  # off the same commit and in parallel -- without this, build_push would
-  # pull lm-server-deps:latest before that run has pushed the new one. Always
-  # runs (never skipped, or build_push's `needs:` would skip it too); returns
-  # at once for a schedule/dispatch run or a push that didn't touch deps/.
-  wait-for-deps:
-    name: Wait for the deps image build (same push, if any)
+  # Did this push change the deps image (deps/, build-deps.yml)? Then it's
+  # rebuilt first, in this very run (job deps), and build_push builds on it.
+  # A new branch counts what it changed against the default branch.
+  changes:
+    name: Check for deps changes
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
+    outputs:
+      deps: ${{ steps.diff.outputs.deps }}
     steps:
-      - name: Wait for a same-commit build-deps.yml run to finish
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Diff deps/ against the previous push
+        id: diff
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
           EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           if [[ "${EVENT}" != "push" ]]; then
-            echo "Not a push -- no build-deps.yml run of the same commit to wait for."
+            echo "deps=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Sibling runs of one push show up within seconds, not always at once.
-          RUN_ID=""
-          for _ in $(seq 1 12); do
-            RUN_ID=$(gh run list --repo "${REPO}" --workflow=build-deps.yml                 --json databaseId,headSha --jq ".[] | select(.headSha == \"${SHA}\") | .databaseId"                 | head -1)
-            [[ -n "${RUN_ID}" ]] && break
-            sleep 5
-          done
-          if [[ -z "${RUN_ID}" ]]; then
-            echo "No build-deps.yml run for ${SHA} -- this push didn't touch deps/."
-            exit 0
+          BASE=${BEFORE}
+          if [[ -z "${BASE}" || "${BASE}" =~ ^0+$ ]] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            BASE=$(git merge-base "origin/${DEFAULT_BRANCH}" HEAD)
           fi
-          echo "Waiting for build-deps.yml run ${RUN_ID} (commit ${SHA})..."
-          # Not --exit-status: a failed deps build doesn't block this one -- it
-          # builds on the lm-server-deps:latest already published.
-          gh run watch "${RUN_ID}" --repo "${REPO}"
+          if git diff --quiet "${BASE}" HEAD -- deps .github/workflows/build-deps.yml; then
+            echo "deps=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deps:
+    name: Deps image
+    needs: changes
+    if: needs.changes.outputs.deps == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-deps.yml
 
   build_push:
     name: Build and push image
-    needs: wait-for-deps
+    # After the deps image, when this push rebuilt it; right away when it
+    # didn't (skipped); never on a failed one -- that would build on stale deps.
+    needs: [changes, deps]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -213,7 +222,8 @@ jobs:
   release-meta:
     name: Publish release
     needs: build_push
-    if: github.event_name != 'pull_request' && needs.build_push.outputs.published == 'true'
+    # !cancelled(): a skipped deps job further up would skip this one too.
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.build_push.result == 'success' && needs.build_push.outputs.published == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -331,7 +341,7 @@ jobs:
   build-iso:
     name: Build installer ISO
     needs: [build_push, release-meta]
-    if: github.event_name != 'pull_request'
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.release-meta.result == 'success' }}
     uses: ./.github/workflows/build-iso.yml
     with:
       publish: true

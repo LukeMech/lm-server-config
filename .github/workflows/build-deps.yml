@@ -1,18 +1,16 @@
 name: Build deps image
 # ghcr.io/lukemech/lm-server-deps (deps/): AlmaLinux's current kernel and the
 # NVIDIA kmod built for it, plus the driver userspace -- prebuilt RPMs the
-# system image (build.yml) bind-mounts at build time. Separate from build.yml
-# (same as immutable-sbc's build-deps.yml): the kmod build runs only when
-# deps/ changes or on its own schedule, not on every system image build.
-# build.yml waits for a run of the same push (its wait-for-deps job).
+# system image (build.yml) bind-mounts at build time. Separate from the
+# system image's build (same as immutable-sbc's build-deps.yml): the kmod
+# build runs only when deps/ changes or on its own schedule.
+#
+# build.yml calls this workflow (its job deps) for a push that changed deps/
+# and builds the system image after it, in the same run. On its own: the
+# schedule (publishes only a new kernel or driver) and by hand.
 
 on:
-  push:
-    branches-ignore:
-      - "dependabot/**"
-    paths:
-      - "deps/**"
-      - ".github/workflows/build-deps.yml"
+  workflow_call:
   schedule:
     # A day before build.yml's own (0 10 1,15 * *): a new kernel or driver is
     # in the deps image by the time the system image is built.
@@ -24,8 +22,10 @@ env:
   IMAGE_NAME: lm-server-deps
   DEFAULT_TAG: latest
 
+# A fixed name, not github.workflow: called from build.yml that would be
+# build.yml's own name -- the same group as the caller's run, cancelling it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  group: lm-server-deps-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
