@@ -3,7 +3,7 @@
 # separately from build.yml (same idea as immutable-sbc's images/deps):
 #
 #   /rpms/kernel/   AlmaLinux's kernel as of this build; the system image
-#                   swaps the base image's own for it (01-kernel.sh)
+#                   swaps the base image's own for it first (00-pre-build.sh)
 #   /rpms/nvidia/   the NVIDIA kmod built for exactly that kernel, plus the
 #                   driver userspace of the same version and the container
 #                   toolkit -- every non-AlmaLinux RPM the driver needs

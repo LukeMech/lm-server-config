@@ -5,6 +5,9 @@ set -ouex pipefail
 
 install -d /rpms/kernel /rpms/nvidia
 
+# dnf download (the base image has no dnf-plugins-core).
+dnf -y install dnf-plugins-core
+
 # Kernel packages installed here are only for building against: none of
 # kernel-install's plugins (rpm-ostree, dracut, bootloader) need to run.
 mkdir -p /etc/kernel/install.d

@@ -146,11 +146,12 @@ image, `ghcr.io/lukemech/lm-server-deps` ([deps/](deps/), built by
 immutable-sbc's), resolves AlmaLinux's current kernel, builds the kmod for it
 (akmods) and carries both as RPMs, with the driver userspace of the same
 version and the container toolkit. The system image swaps the base image's
-kernel for exactly that one ([01-kernel.sh](build_files/01-kernel.sh)) and
+kernel for exactly that one ([00-pre-build.sh](build_files/00-pre-build.sh), before anything else in the build) and
 installs the rest ([40-nvidia.sh](build_files/40-nvidia.sh)), so module and
-kernel always match. The deps image is rebuilt on a change in `deps/` (which
-then starts the system build) and every two weeks, a day before the system
-image; it's published only if the kernel or the driver changed.
+kernel always match. The deps image is rebuilt on a change in `deps/` (the
+system build of the same push waits for it) and every two weeks, a day before
+the system image; a scheduled run publishes only if the kernel or the driver
+changed.
 
 Containers get it through CDI: `nvidia-cdi-refresh` writes `/run/cdi/nvidia.yaml`
 at every boot (only with the card present) and lets containers use

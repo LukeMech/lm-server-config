@@ -4,6 +4,7 @@ name: Build deps image
 # system image (build.yml) bind-mounts at build time. Separate from build.yml
 # (same as immutable-sbc's build-deps.yml): the kmod build runs only when
 # deps/ changes or on its own schedule, not on every system image build.
+# build.yml waits for a run of the same push (its wait-for-deps job).
 
 on:
   push:
@@ -34,7 +35,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: write # starts build.yml afterwards
 
     steps:
       - name: Checkout
@@ -87,12 +87,3 @@ jobs:
       - name: Push to GHCR
         if: github.event_name != 'schedule' || steps.check-changes.outputs.changed == 'true'
         run: podman push "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-
-      # A change to deps/ reaches the system image right away (build.yml
-      # ignores deps/ itself, so it never races this build). Scheduled runs
-      # leave it to build.yml's own schedule the next day.
-      - name: Build the system image with it
-        if: github.event_name != 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"

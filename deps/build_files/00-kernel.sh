@@ -3,7 +3,7 @@
 # resolved fresh every run (security updates flow in without a pin to bump;
 # build-deps.yml publishes only when it -- or the driver -- changed). The
 # system image replaces the base image's kernel with exactly these RPMs
-# (build_files/01-kernel.sh), so the kmod built below always matches.
+# (build_files/00-pre-build.sh), so the kmod built below always matches.
 set -ouex pipefail
 
 cd /rpms/kernel

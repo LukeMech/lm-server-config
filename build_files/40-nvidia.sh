@@ -4,7 +4,7 @@
 #
 # Everything comes prebuilt from the deps image (deps/build_files/10-nvidia.sh,
 # bind-mounted at /deps-rpms): RPM Fusion's 580xx driver -- the last branch
-# with Pascal -- its kmod built for this image's kernel (01-kernel.sh), and
+# with Pascal -- its kmod built for this image's kernel (00-pre-build.sh), and
 # nvidia-container-toolkit-base. Their remaining dependencies come from
 # AlmaLinux's repos; no third-party repo is enabled here.
 #

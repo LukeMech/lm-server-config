@@ -1,6 +1,6 @@
 #!/bin/bash
 # Packages almalinux-bootc ships that lm-server has no use for. Removed first
-# thing, before anything is installed -- by build.sh for the system image and
+# thing, before anything is installed -- by 00-pre-build.sh for the system image and
 # by iso/Containerfile for the installer -- so a later install that really
 # requires one just brings it back instead of dnf remove taking the installed
 # packages with it.
