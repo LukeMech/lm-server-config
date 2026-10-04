@@ -133,6 +133,40 @@ is no longer needed:
 `sudo rm -r /etc/systemd/system/ostree-finalize-staged.service.d`.
 `lm-server rollback` still goes back to Fedora.
 
+## NVIDIA GPU
+
+The image carries NVIDIA's driver for the X99 machine's GTX 1050 (Pascal):
+the proprietary 580 branch from RPM Fusion, the last one with Pascal (Linux
+580.x is the same R580 branch as Windows' 580-582.xx). On a machine without
+an NVIDIA card it never loads. `nvidia-smi` shows the card.
+
+The kernel module isn't compiled in the system image's build. A separate
+image, `ghcr.io/lukemech/lm-server-deps` ([deps/](deps/), built by
+[build-deps.yml](.github/workflows/build-deps.yml), same idea as
+immutable-sbc's), resolves AlmaLinux's current kernel, builds the kmod for it
+(akmods) and carries both as RPMs, with the driver userspace of the same
+version and the container toolkit. The system image swaps the base image's
+kernel for exactly that one ([00-pre-build.sh](build_files/00-pre-build.sh), before anything else in the build) and
+installs the rest ([40-nvidia.sh](build_files/40-nvidia.sh)), so module and
+kernel always match. The deps image is rebuilt on a change in `deps/` (the
+system build of the same push waits for it) and every two weeks, a day before
+the system image; a scheduled run publishes only if the kernel or the driver
+changed.
+
+Containers get it through CDI: `nvidia-cdi-refresh` writes `/run/cdi/nvidia.yaml`
+at every boot (only with the card present) and lets containers use
+`/dev/nvidia*` (SELinux boolean `container_use_xserver_devices`). For Immich:
+
+```toml
+[immich]
+gpu = "nvidia"   # machine learning on CUDA, the server for NVENC transcoding
+```
+
+Machine learning switches to its `-cuda` image. Transcoding on the card is
+switched on in Immich itself: Administration > Video Transcoding > Hardware
+Acceleration > NVENC. With `gpu` set on a machine without the card, Immich
+won't start.
+
 ## Disks
 
 Every service keeps all of its data in one folder,

@@ -28,8 +28,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Same as immutable-sbc: a push touching deps/ starts build-deps.yml too,
+  # off the same commit and in parallel -- without this, build_push would
+  # pull lm-server-deps:latest before that run has pushed the new one. Always
+  # runs (never skipped, or build_push's `needs:` would skip it too); returns
+  # at once for a schedule/dispatch run or a push that didn't touch deps/.
+  wait-for-deps:
+    name: Wait for the deps image build (same push, if any)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for a same-commit build-deps.yml run to finish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT}" != "push" ]]; then
+            echo "Not a push -- no build-deps.yml run of the same commit to wait for."
+            exit 0
+          fi
+          # Sibling runs of one push show up within seconds, not always at once.
+          RUN_ID=""
+          for _ in $(seq 1 12); do
+            RUN_ID=$(gh run list --repo "${REPO}" --workflow=build-deps.yml                 --json databaseId,headSha --jq ".[] | select(.headSha == \"${SHA}\") | .databaseId"                 | head -1)
+            [[ -n "${RUN_ID}" ]] && break
+            sleep 5
+          done
+          if [[ -z "${RUN_ID}" ]]; then
+            echo "No build-deps.yml run for ${SHA} -- this push didn't touch deps/."
+            exit 0
+          fi
+          echo "Waiting for build-deps.yml run ${RUN_ID} (commit ${SHA})..."
+          # Not --exit-status: a failed deps build doesn't block this one -- it
+          # builds on the lm-server-deps:latest already published.
+          gh run watch "${RUN_ID}" --repo "${REPO}"
+
   build_push:
     name: Build and push image
+    needs: wait-for-deps
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,9 +114,7 @@ jobs:
             echo "test_mode=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build image
-        run: just build "${IMAGE_NAME}" "${DEFAULT_TAG}"
-
+      # Before the build: it pulls ghcr.io/lukemech/lm-server-deps (Containerfile).
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -84,6 +122,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The deps image to build on: this branch's own (testing-<branch>, if
+      # build-deps.yml ever ran on it), else the default branch's latest.
+      - name: Pick the deps image
+        run: |
+          set -euo pipefail
+          DEPS_TAG=latest
+          if [[ "${DEFAULT_TAG}" == testing-* ]] &&
+            skopeo inspect --raw "docker://${IMAGE_REGISTRY}/lm-server-deps:${DEFAULT_TAG}" >/dev/null 2>&1; then
+            DEPS_TAG=${DEFAULT_TAG}
+          fi
+          echo "deps image: lm-server-deps:${DEPS_TAG}"
+          echo "DEPS_TAG=${DEPS_TAG}" >> "$GITHUB_ENV"
+
+      - name: Build image
+        run: just build "${IMAGE_NAME}" "${DEFAULT_TAG}"
 
       # Diff against the last release's image (not :latest, which can drift).
       - name: Check package changes

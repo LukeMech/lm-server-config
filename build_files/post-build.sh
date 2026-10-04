@@ -9,22 +9,29 @@ set -ouex pipefail
 bash /ctx/remove-packages.sh --check \
     qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install \
     edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged \
-    cockpit-files firewalld sos \
+    cockpit-files firewalld sos xorg-x11-drv-nvidia-580xx \
     --commands \
     bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint \
     systemd-escape flock base64 sha256sum od useradd usermod getent timedatectl \
     hostnamectl systemd-analyze firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
-    pminfo tuned-adm semodule semanage setsebool restorecon
+    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi nvidia-ctk
 
 # The kernel's version from its package, not from /usr/lib/modules: that can
 # hold more directories than the kernel's own (a kABI-tracking kmod installs
 # into one of the kABI base version, e.g. 6.12.0-211.el10_2.x86_64).
 kver=$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)
 
+# Still only the deps image's kernel (00-pre-build.sh) -- nothing installed
+# since brought another one along, which the NVIDIA kmod wouldn't match.
+if [[ ${kver} != "$(</deps-rpms/KVER)" || $(rpm -qa kernel-core | wc -l) != 1 ]]; then
+    echo "error: kernel is not just the deps image's $(</deps-rpms/KVER):" $(rpm -qa kernel-core) >&2
+    exit 1
+fi
+
 # Kernel modules for both machines' hardware (remove-packages.sh): NICs,
-# iGPU, CPU temperatures.
-for module in e1000e igb r8169 i915 coretemp; do
+# GPUs, CPU temperatures.
+for module in e1000e igb r8169 i915 nvidia nvidia-drm coretemp; do
     modinfo -k "${kver}" -F filename "${module}" >/dev/null || {
         echo "error: kernel module ${module} missing from the image" >&2
         exit 1

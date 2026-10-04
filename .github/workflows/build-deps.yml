@@ -1,0 +1,119 @@
+name: Build deps image
+# ghcr.io/lukemech/lm-server-deps (deps/): AlmaLinux's current kernel and the
+# NVIDIA kmod built for it, plus the driver userspace -- prebuilt RPMs the
+# system image (build.yml) bind-mounts at build time. Separate from build.yml
+# (same as immutable-sbc's build-deps.yml): the kmod build runs only when
+# deps/ changes or on its own schedule, not on every system image build.
+# build.yml waits for a run of the same push (its wait-for-deps job).
+
+on:
+  push:
+    branches-ignore:
+      - "dependabot/**"
+    paths:
+      - "deps/**"
+      - ".github/workflows/build-deps.yml"
+  schedule:
+    # A day before build.yml's own (0 10 1,15 * *): a new kernel or driver is
+    # in the deps image by the time the system image is built.
+    - cron: "0 10 14,28 * *"
+  workflow_dispatch:
+
+env:
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+  IMAGE_NAME: lm-server-deps
+  DEFAULT_TAG: latest
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build_push:
+    name: Build and push deps image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Prepare environment
+        run: echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "$GITHUB_ENV"
+
+      # As build.yml: latest from the default branch, testing-<branch> from
+      # any other -- build.yml on that branch builds with it.
+      - name: Compute test-branch mode
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref }}" != "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+            BRANCH_SLUG=$(printf '%s' "${{ github.ref_name }}" | tr -c 'a-zA-Z0-9' '-' | tr 'A-Z' 'a-z')
+            echo "DEFAULT_TAG=testing-${BRANCH_SLUG}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build deps image
+        run: podman build --pull=newer --tag "${IMAGE_NAME}:${DEFAULT_TAG}" --file deps/Containerfile deps
+
+      # Tags next to <tag>: <tag>-<kernel>-<driver>, naming what's inside
+      # (latest-6.12.0-211.56.1.el10_2.x86_64-580.178.04), and <tag>-<commit>.
+      # The image is FROM scratch (nothing to run): its version files are
+      # copied out of a created container.
+      - name: Read the kernel and driver versions
+        id: versions
+        run: |
+          set -euo pipefail
+          cid=$(podman create "${IMAGE_NAME}:${DEFAULT_TAG}" true)
+          KVER=$(podman cp "${cid}:/rpms/KVER" - | tar -xO)
+          NVIDIA=$(podman cp "${cid}:/rpms/NVIDIA" - | tar -xO)
+          podman rm -f "${cid}" >/dev/null
+          echo "tag=${DEFAULT_TAG}-${KVER}-${NVIDIA}" >> "$GITHUB_OUTPUT"
+
+      # A scheduled run publishes only if the kernel or the driver moved. The
+      # image is FROM scratch (nothing to run): its two version files are
+      # copied out of a created container.
+      - name: Check whether the kernel or the driver changed
+        if: github.event_name == 'schedule'
+        id: check-changes
+        run: |
+          set -euo pipefail
+          versions() {
+            local cid
+            cid=$(podman create "$1" true) || return 0
+            podman cp "${cid}:/rpms/KVER" - 2>/dev/null | tar -xO || true
+            podman cp "${cid}:/rpms/NVIDIA" - 2>/dev/null | tar -xO || true
+            podman rm -f "${cid}" >/dev/null
+          }
+          NEW=$(versions "${IMAGE_NAME}:${DEFAULT_TAG}")
+          OLD=""
+          if podman pull --quiet "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >/dev/null 2>&1; then
+            OLD=$(versions "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}")
+          fi
+          echo "published: ${OLD:-<none>}"
+          echo "built:     ${NEW}"
+          if [[ "${NEW}" == "${OLD}" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.changed == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No cosign/chunkah: never pulled by a booted server, only bind-mounted
+      # at build.yml's build time.
+      - name: Push to GHCR
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.changed == 'true'
+        env:
+          VERSION_TAG: ${{ steps.versions.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for tag in "${DEFAULT_TAG}" "${VERSION_TAG}" "${DEFAULT_TAG}-$(git rev-parse --short HEAD)"; do
+            podman push "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+          done

@@ -1,0 +1,34 @@
+#!/bin/bash
+# NVIDIA driver for the X99 machine's GeForce GTX 1050 (Pascal). Its Xeon
+# E5-2680 v4 has no iGPU, so the card is the only display.
+#
+# Everything comes prebuilt from the deps image (deps/build_files/10-nvidia.sh,
+# bind-mounted at /deps-rpms): RPM Fusion's 580xx driver -- the last branch
+# with Pascal -- its kmod built for this image's kernel (00-pre-build.sh), and
+# nvidia-container-toolkit-base. Their remaining dependencies come from
+# AlmaLinux's repos; no third-party repo is enabled here.
+#
+# On the i5-4590 machine (no NVIDIA card) none of it ever loads.
+set -ouex pipefail
+
+kver=$(</deps-rpms/KVER)
+
+dnf -y install /deps-rpms/nvidia/*.rpm
+
+# The card for containers ([immich] gpu = "nvidia"): podman hands it over
+# through CDI; nvidia-cdi-refresh writes /run/cdi/nvidia.yaml at every boot
+# (lm-server's drop-in: only with an NVIDIA card in the machine).
+systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
+
+# The module for this kernel, from the kmod RPM, of the driver's version.
+# EL kmods are kABI-tracking: modinfo finds it through weak-modules' link in
+# /usr/lib/modules/<kver>/weak-updates/, the RPM owns the file it points to.
+module=$(modinfo -k "${kver}" -F filename nvidia)
+rpm -qf "$(readlink -f "${module}")"
+# Prebuilt only: nothing that would compile a module on the server.
+if tooling=$(rpm -qa 'akmod*' 'kernel-devel*' | grep .); then
+    echo "error: kmod build tooling in the image:" ${tooling} >&2
+    exit 1
+fi
+[[ $(modinfo -k "${kver}" -F version nvidia) == "$(</deps-rpms/NVIDIA)" ]]
+[[ $(rpm -q --qf '%{VERSION}' xorg-x11-drv-nvidia-580xx) == "$(</deps-rpms/NVIDIA)" ]]

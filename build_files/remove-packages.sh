@@ -15,10 +15,11 @@
 # alike): lm-server's two Intel machines -- i5-4590 (Haswell) with its i915
 # iGPU and an e1000e NIC; MOUGOL X99 with a Xeon E5-2680 v4 (Broadwell-EP)
 # and (most likely; Chinese X99 boards vary) a Realtek RTL8111-family NIC
-# (r8169, realtek-firmware); its GTX 1050 gets nouveau's plain modesetting
-# (no firmware). NOT supported: AMD CPUs, AMD GPUs, accelerated nouveau,
-# Intel iGPUs from 6th gen/Skylake on (GuC/HuC/DMC), Wi-Fi, Bluetooth, WWAN,
-# onboard sound.
+# (r8169, realtek-firmware), whose GTX 1050 the
+# installed system drives with NVIDIA's own driver (40-nvidia.sh; the
+# installer gets by with nouveau's plain modesetting, no firmware). NOT
+# supported: AMD CPUs, AMD GPUs, accelerated nouveau, Intel iGPUs from 6th
+# gen/Skylake on (GuC/HuC/DMC), Wi-Fi, Bluetooth, WWAN, onboard sound.
 # linux-firmware (other wired NICs, storage controllers) and microcode_ctl
 # (Intel CPU microcode) stay.
 #
