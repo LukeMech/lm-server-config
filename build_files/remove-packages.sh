@@ -1,6 +1,6 @@
 #!/bin/bash
 # Packages almalinux-bootc ships that lm-server has no use for. Removed first
-# thing, before anything is installed -- by build.sh for the system image and
+# thing, before anything is installed -- by 00-pre-build.sh for the system image and
 # by iso/Containerfile for the installer -- so a later install that really
 # requires one just brings it back instead of dnf remove taking the installed
 # packages with it.
@@ -12,10 +12,13 @@
 # commands are missing (listing all of them, not just the first).
 #
 # Hardware this leaves supported (the installer and the installed system
-# alike): Intel machines like lm-server -- i5-4590 (Haswell), its i915 iGPU
-# and an e1000e NIC, none of which loads firmware. NOT supported: AMD CPUs,
-# AMD/NVIDIA GPUs, Intel iGPUs from 6th gen/Skylake on (GuC/HuC/DMC), Realtek
-# NICs (r8169, USB r8152), Wi-Fi, Bluetooth, WWAN, onboard sound.
+# alike): lm-server's two Intel machines -- i5-4590 (Haswell) with its i915
+# iGPU and an e1000e NIC; MOUGOL X99 with a Xeon E5-2680 v4 (Broadwell-EP)
+# and (most likely; Chinese X99 boards vary) a Realtek RTL8111-family NIC
+# (r8169, realtek-firmware); its GTX 1050 gets nouveau's plain modesetting
+# (no firmware). NOT supported: AMD CPUs, AMD GPUs, accelerated nouveau,
+# Intel iGPUs from 6th gen/Skylake on (GuC/HuC/DMC), Wi-Fi, Bluetooth, WWAN,
+# onboard sound.
 # linux-firmware (other wired NICs, storage controllers) and microcode_ctl
 # (Intel CPU microcode) stay.
 #
@@ -30,7 +33,6 @@ REMOVE=(
     amd-gpu-firmware
     intel-gpu-firmware
     nvidia-gpu-firmware
-    realtek-firmware
     atheros-firmware
     brcmfmac-firmware
     iwlwifi-dvm-firmware
@@ -79,7 +81,7 @@ REMOVE=(
 # Both images need these from the base image.
 KEEP=(
     bootc dracut clevis-dracut grub2-efi-x64 grub2-tools shim-x64 linux-firmware
-    microcode_ctl NetworkManager podman sudo flashrom
+    realtek-firmware microcode_ctl NetworkManager podman sudo flashrom
 )
 
 installed=()

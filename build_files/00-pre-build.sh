@@ -1,9 +1,16 @@
 #!/bin/bash
+# First thing in the build (build.sh runs it before everything else): the
+# dnf setup, the removal of unused base packages, then the packages
+# lm-server relies on.
 set -ouex pipefail
 
 # Never install weak dependencies (Recommends/Supplements).
 grep -q '^install_weak_deps' /etc/dnf/dnf.conf ||
     sed -i '/^\[main\]/a install_weak_deps=False' /etc/dnf/dnf.conf
+
+### Base packages lm-server has no use for, before anything is installed
+# (see remove-packages.sh).
+bash /ctx/remove-packages.sh
 
 # Everything lm-server itself relies on, listed explicitly -- even what
 # almalinux-bootc ships today -- so a base-image change can't silently drop it.

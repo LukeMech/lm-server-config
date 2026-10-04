@@ -17,6 +17,17 @@ bash /ctx/remove-packages.sh --check \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
     pminfo tuned-adm semodule semanage setsebool restorecon
 
+kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
+
+# Kernel modules for both machines' hardware (remove-packages.sh): NICs,
+# iGPU, CPU temperatures.
+for module in e1000e igb r8169 i915 coretemp; do
+    modinfo -k "${kver}" -F filename "${module}" >/dev/null || {
+        echo "error: kernel module ${module} missing from the image" >&2
+        exit 1
+    }
+done
+
 # Nothing Bluetooth may come back through another package's dependencies.
 if bt=$(rpm -qa --qf '%{NAME} ' | tr ' ' '\n' | grep -iE '^bluez|bluetooth'); then
     echo "error: Bluetooth packages in the image:" ${bt} >&2
@@ -45,7 +56,6 @@ fi
 
 # Rebuild the initramfs: it carries its own copy of os-release (initrd-release),
 # so without this the initrd still prints "Welcome to AlmaLinux".
-kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
 DRACUT_NO_XATTR=1 dracut --no-hostonly --kver "${kver}" --reproducible --zstd --add ostree -f \
     "/usr/lib/modules/${kver}/initramfs.img"
 chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"

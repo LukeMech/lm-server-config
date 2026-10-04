@@ -6,3 +6,10 @@ grub2:
     - name: "Install LM-Server"
       linux: "/images/pxeboot/vmlinuz inst.stage2=hd:LABEL=LM-Server-Installer console=tty0 inst.graphical selinux=0 rhgb quiet"
       initrd: "/images/pxeboot/initrd.img"
+    # The installer has no NVIDIA driver: a GTX 1050 (X99 machine, no iGPU)
+    # runs on nouveau, without its firmware -- plain modesetting, software
+    # rendering. Should that still give a black screen: the firmware's own
+    # framebuffer, no GPU driver at all.
+    - name: "Install LM-Server (basic graphics)"
+      linux: "/images/pxeboot/vmlinuz inst.stage2=hd:LABEL=LM-Server-Installer console=tty0 inst.graphical selinux=0 nomodeset rhgb quiet"
+      initrd: "/images/pxeboot/initrd.img"
