@@ -43,12 +43,23 @@ jobs:
       - name: Prepare environment
         run: echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "$GITHUB_ENV"
 
+      # As build.yml: latest from the default branch, testing-<branch> from
+      # any other -- build.yml on that branch builds with it.
+      - name: Compute test-branch mode
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref }}" != "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+            BRANCH_SLUG=$(printf '%s' "${{ github.ref_name }}" | tr -c 'a-zA-Z0-9' '-' | tr 'A-Z' 'a-z')
+            echo "DEFAULT_TAG=testing-${BRANCH_SLUG}" >> "$GITHUB_ENV"
+          fi
+
       - name: Build deps image
         run: podman build --pull=newer --tag "${IMAGE_NAME}:${DEFAULT_TAG}" --file deps/Containerfile deps
 
-      # A second tag naming what's inside, <kernel>-<driver>
-      # (6.12.0-211.56.1.el10_2.x86_64-580.178.04). The image is FROM scratch
-      # (nothing to run): its version files are copied out of a created container.
+      # Tags next to <tag>: <tag>-<kernel>-<driver>, naming what's inside
+      # (latest-6.12.0-211.56.1.el10_2.x86_64-580.178.04), and <tag>-<commit>.
+      # The image is FROM scratch (nothing to run): its version files are
+      # copied out of a created container.
       - name: Read the kernel and driver versions
         id: versions
         run: |
@@ -57,7 +68,7 @@ jobs:
           KVER=$(podman cp "${cid}:/rpms/KVER" - | tar -xO)
           NVIDIA=$(podman cp "${cid}:/rpms/NVIDIA" - | tar -xO)
           podman rm -f "${cid}" >/dev/null
-          echo "tag=${KVER}-${NVIDIA}" >> "$GITHUB_OUTPUT"
+          echo "tag=${DEFAULT_TAG}-${KVER}-${NVIDIA}" >> "$GITHUB_OUTPUT"
 
       # A scheduled run publishes only if the kernel or the driver moved. The
       # image is FROM scratch (nothing to run): its two version files are
@@ -103,6 +114,6 @@ jobs:
           VERSION_TAG: ${{ steps.versions.outputs.tag }}
         run: |
           set -euo pipefail
-          for tag in "${DEFAULT_TAG}" "${VERSION_TAG}"; do
+          for tag in "${DEFAULT_TAG}" "${VERSION_TAG}" "${DEFAULT_TAG}-$(git rev-parse --short HEAD)"; do
             podman push "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
           done

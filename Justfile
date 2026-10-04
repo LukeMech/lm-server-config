@@ -49,7 +49,7 @@ build $target_image=image_name $tag=default_tag:
     LABELS+=("--label" "org.opencontainers.image.description={{ image_desc }}")
     LABELS+=("--label" "org.opencontainers.image.title={{ image_name }}")
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
-    podman build "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile .
+    podman build "${LABELS[@]}" --build-arg "DEPS_TAG=${DEPS_TAG:-latest}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile .
 
 # Build a service image from images/<name>/ (-> lm-server-<name>)
 [group('Build')]

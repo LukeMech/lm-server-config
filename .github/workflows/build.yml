@@ -123,6 +123,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The deps image to build on: this branch's own (testing-<branch>, if
+      # build-deps.yml ever ran on it), else the default branch's latest.
+      - name: Pick the deps image
+        run: |
+          set -euo pipefail
+          DEPS_TAG=latest
+          if [[ "${DEFAULT_TAG}" == testing-* ]] &&
+            skopeo inspect --raw "docker://${IMAGE_REGISTRY}/lm-server-deps:${DEFAULT_TAG}" >/dev/null 2>&1; then
+            DEPS_TAG=${DEFAULT_TAG}
+          fi
+          echo "deps image: lm-server-deps:${DEPS_TAG}"
+          echo "DEPS_TAG=${DEPS_TAG}" >> "$GITHUB_ENV"
+
       - name: Build image
         run: just build "${IMAGE_NAME}" "${DEFAULT_TAG}"
 
