@@ -50,12 +50,17 @@ if ! runuser -s /bin/bash -c "akmodsbuild --kernels ${kver} --outputdir ${out} \
     cat "${out}/akmodsbuild.log" >&2 || true
     exit 1
 fi
-kmod=$(find "${out}" -name "kmod-nvidia-580xx-${kver}-*.rpm" ! -name '*debuginfo*' -print -quit)
-[[ -n ${kmod} ]] || {
-    echo "error: akmodsbuild built no kmod-nvidia-580xx for ${kver}:" >&2
+# Named after the kernel's kABI base version, not the kernel itself
+# (kmod-nvidia-580xx-6.12.0-211.el10_2-...rpm for 6.12.0-211.56.1.el10_2):
+# EL kmods are kABI-tracking -- installed for that base version, linked into
+# the kernel's weak-updates/ by weak-modules. Exactly one is expected.
+mapfile -t kmods < <(find "${out}" -name 'kmod-nvidia-580xx-*.rpm' ! -name '*debuginfo*')
+((${#kmods[@]} == 1)) || {
+    echo "error: akmodsbuild built ${#kmods[@]} kmod-nvidia-580xx RPMs for ${kver}, not 1:" >&2
     ls -la "${out}" >&2
     exit 1
 }
+kmod=${kmods[0]}
 cp "${kmod}" /rpms/nvidia/
 
 # Module and userspace of one version (same repo, same minute -- checked).

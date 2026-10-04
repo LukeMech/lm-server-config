@@ -21,7 +21,9 @@ dnf -y install /deps-rpms/nvidia/*.rpm
 systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
 
 # The module for this kernel, from the kmod RPM, of the driver's version.
+# EL kmods are kABI-tracking: modinfo finds it through weak-modules' link in
+# /usr/lib/modules/<kver>/weak-updates/, the RPM owns the file it points to.
 module=$(modinfo -k "${kver}" -F filename nvidia)
-rpm -qf "${module}"
+rpm -qf "$(readlink -f "${module}")"
 [[ $(modinfo -k "${kver}" -F version nvidia) == "$(</deps-rpms/NVIDIA)" ]]
 [[ $(rpm -q --qf '%{VERSION}' xorg-x11-drv-nvidia-580xx) == "$(</deps-rpms/NVIDIA)" ]]
