@@ -9,7 +9,7 @@ set -ouex pipefail
 bash /ctx/remove-packages.sh --check \
     qemu-kvm-core libvirt-daemon-driver-qemu cockpit-machines virt-install \
     edk2-ovmf swtpm cockpit-ws cockpit-system cockpit-podman cockpit-storaged \
-    cockpit-files firewalld sos xorg-x11-drv-nvidia-580xx \
+    cockpit-files firewalld sos nvidia-driver-cuda \
     --commands \
     bootc cloudflared podman skopeo git jq curl python3 rsync mountpoint \
     systemd-escape flock base64 sha256sum od useradd usermod getent timedatectl \
