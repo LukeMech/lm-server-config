@@ -231,7 +231,8 @@ jobs:
         id: release-tag
         run: |
           set -euo pipefail
-          ALMA_VER=$(awk -F'[:@]' '/^FROM quay.io\/almalinuxorg\/almalinux-bootc:/ {print $2; exit}' Containerfile)
+          # The tag of the FROM line's image -- not what follows it ("AS base").
+          ALMA_VER=$(awk '/^FROM quay.io\/almalinuxorg\/almalinux-bootc:/ { split($2, a, /[:@]/); print a[2]; exit }' Containerfile)
           [[ -n "${ALMA_VER}" ]] || { echo "no almalinux-bootc FROM line" >&2; exit 1; }
           PREFIX="v${ALMA_VER}.$(date -u +%Y%m%d)"
           if ! git rev-parse -q --verify "refs/tags/${PREFIX}" >/dev/null && [[ -z "$(git tag -l "${PREFIX}.*")" ]]; then
