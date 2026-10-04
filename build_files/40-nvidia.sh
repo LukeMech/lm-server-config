@@ -14,13 +14,15 @@ set -ouex pipefail
 
 kver=$(</deps-rpms/KVER)
 
-# Without /usr/lib/firmware/nvidia (~100 MB, nvidia-kmod-common): GSP
-# firmware, used only by Turing and newer -- never by the Pascal card.
-# _netsharedpath makes rpm leave those files out.
-echo '%_netsharedpath /usr/lib/firmware/nvidia' >/etc/rpm/macros.lm-server-nvidia
+# Without /usr/lib/firmware/nvidia/<version> (~100 MB, nvidia-kmod-common):
+# GSP firmware, used only by Turing and newer -- never by the Pascal card.
+# _netsharedpath makes rpm leave those files out. (The rest of that folder,
+# linux-firmware's Tegra firmware, stays as it is.)
+gsp=/usr/lib/firmware/nvidia/$(</deps-rpms/NVIDIA)
+echo "%_netsharedpath ${gsp}" >/etc/rpm/macros.lm-server-nvidia
 dnf -y install /deps-rpms/nvidia/*.rpm
 rm -f /etc/rpm/macros.lm-server-nvidia
-[[ ! -e /usr/lib/firmware/nvidia ]] || [[ -z $(ls -A /usr/lib/firmware/nvidia) ]]
+[[ ! -e ${gsp} ]] || [[ -z $(ls -A "${gsp}") ]]
 
 # The card for containers ([immich] gpu = "nvidia"): podman hands it over
 # through CDI; nvidia-cdi-refresh writes /run/cdi/nvidia.yaml at every boot
