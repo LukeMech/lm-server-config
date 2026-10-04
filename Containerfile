@@ -15,9 +15,17 @@ COPY system_files /system_files
 # follow automatically under this tag. Floating tag on purpose (same reasoning
 # as immutable-sbc: a pinned digest 404s once quay.io garbage-collects it).
 # Never :latest -- that is still AlmaLinux 9.
-FROM quay.io/almalinuxorg/almalinux-bootc:10
+FROM quay.io/almalinuxorg/almalinux-bootc:10 AS base
+
+# Prebuilt kernel + NVIDIA RPMs (deps/, built and pushed by build-deps.yml).
+# Only bind-mounted at build time, never pulled by a server. Floating tag:
+# it follows AlmaLinux's kernel.
+FROM ghcr.io/lukemech/lm-server-deps:latest AS deps
+
+FROM base
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=bind,from=deps,source=/rpms,target=/deps-rpms \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
     --mount=type=tmpfs,dst=/tmp \

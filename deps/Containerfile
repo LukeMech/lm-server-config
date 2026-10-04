@@ -1,0 +1,27 @@
+# ghcr.io/lukemech/lm-server-deps: prebuilt RPMs the system image installs
+# (Containerfile bind-mounts /rpms at /deps-rpms), built by build-deps.yml --
+# separately from build.yml (same idea as immutable-sbc's images/deps):
+#
+#   /rpms/kernel/   AlmaLinux's kernel as of this build; the system image
+#                   swaps the base image's own for it (01-kernel.sh)
+#   /rpms/nvidia/   the NVIDIA kmod built for exactly that kernel, plus the
+#                   driver userspace of the same version and the container
+#                   toolkit -- every non-AlmaLinux RPM the driver needs
+#   /rpms/KVER, /rpms/NVIDIA   the two versions, one line each
+#
+# Never booted nor pulled by a server, only bind-mounted at build time: no
+# signature, no rechunking. Built with deps/ as the context.
+FROM scratch AS ctx
+COPY build_files /
+
+# The system image's base: the kmod is built on the same EL release.
+FROM quay.io/almalinuxorg/almalinux-bootc:10 AS builder
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build.sh
+
+FROM scratch
+# Links the GHCR package to the repo (and its public visibility).
+LABEL org.opencontainers.image.source="https://github.com/LukeMech/lm-server-config"
+COPY --from=builder /rpms /rpms

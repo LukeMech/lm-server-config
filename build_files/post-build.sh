@@ -19,6 +19,13 @@ bash /ctx/remove-packages.sh --check \
 
 kver=$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)")
 
+# Still only the deps image's kernel (01-kernel.sh) -- nothing installed
+# since brought another one along, which the NVIDIA kmod wouldn't match.
+if [[ ${kver} != "$(</deps-rpms/KVER)" || $(rpm -qa kernel-core | wc -l) != 1 ]]; then
+    echo "error: kernel is not just the deps image's $(</deps-rpms/KVER):" $(rpm -qa kernel-core) >&2
+    exit 1
+fi
+
 # Kernel modules for both machines' hardware (remove-packages.sh): NICs,
 # GPUs, CPU temperatures.
 for module in e1000e igb r8169 i915 nvidia nvidia-drm coretemp; do
