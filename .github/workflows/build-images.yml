@@ -40,7 +40,7 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.discover.outputs.images) }}
       fail-fast: false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
