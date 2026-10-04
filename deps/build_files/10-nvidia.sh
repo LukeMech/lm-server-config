@@ -3,7 +3,7 @@
 #
 # Pascal needs NVIDIA's proprietary 580 branch: 590+ dropped Maxwell/Pascal/
 # Volta and the open kernel modules never supported them. RPM Fusion's
-# nvidia-580xx packages (akmods from EPEL).
+# nvidia-580xx packages (akmods, with akmodsbuild, from EPEL).
 #
 # akmod-nvidia-580xx is only the module source plus akmods, which builds a
 # kmod RPM for one kernel -- normally at boot, which can't work with the
@@ -38,15 +38,22 @@ for rpm in "${dl}"/*.rpm; do
     [[ $(rpm -qp --qf '%{VENDOR}' "${rpm}") == AlmaLinux* ]] || cp "${rpm}" /rpms/nvidia/
 done
 
-# The kmod: akmods builds it against kernel-devel-<kver> (00-kernel.sh).
+# The kmod, against kernel-devel-<kver> (00-kernel.sh): akmodsbuild, called
+# the way akmods itself calls it (as the akmods user), but into a directory
+# of our own -- akmods builds into a temporary one, installs from there and
+# only then copies the RPMs into its cache, under names not worth guessing.
 dnf -y install akmod-nvidia-580xx
-if ! akmods --force --kernels "${kver}"; then
-    cat /var/cache/akmods/*/*.log >&2 || true
+out=$(mktemp -d)
+chown akmods "${out}"
+if ! runuser -s /bin/bash -c "akmodsbuild --kernels ${kver} --outputdir ${out} \
+    --logfile ${out}/akmodsbuild.log /usr/src/akmods/nvidia-580xx-kmod.latest" akmods; then
+    cat "${out}/akmodsbuild.log" >&2 || true
     exit 1
 fi
-kmod=$(find /var/cache/akmods -name "kmod-nvidia-580xx-${kver}-*.rpm" -print -quit)
+kmod=$(find "${out}" -name "kmod-nvidia-580xx-${kver}-*.rpm" ! -name '*debuginfo*' -print -quit)
 [[ -n ${kmod} ]] || {
-    echo "error: akmods built no kmod-nvidia-580xx for ${kver}" >&2
+    echo "error: akmodsbuild built no kmod-nvidia-580xx for ${kver}:" >&2
+    ls -la "${out}" >&2
     exit 1
 }
 cp "${kmod}" /rpms/nvidia/
