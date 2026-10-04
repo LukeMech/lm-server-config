@@ -82,6 +82,10 @@ done
 shopt -u nullglob
 ls "${moddir}"/nvidia.ko.xz >/dev/null
 du -sh "${moddir}"
+# The driver's epoch (3 today): nvidia-kmod-common requires nvidia-kmod =
+# <epoch>:<version> -- without it ours would be 0:..., too old.
+epoch=$(rpm -qp --qf '%{EPOCH}' /rpms/nvidia/nvidia-kmod-common-[0-9]*.rpm)
+[[ ${epoch} =~ ^[0-9]+$ ]] || epoch=0
 # Release: 1.<kernel> without its arch; no "-" allowed there.
 release=1.${kver%.*}
 release=${release//-/_}
@@ -95,7 +99,7 @@ Version: ${ver}
 Release: ${release}
 Summary: NVIDIA ${ver} closed kernel modules for ${kver}
 License: NVIDIA
-Provides: nvidia-kmod = ${ver}
+Provides: nvidia-kmod = ${epoch}:${ver}
 Requires: kernel-uname-r = ${kver}
 
 %description
