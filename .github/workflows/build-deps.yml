@@ -5,16 +5,12 @@ name: Build deps image
 # system image's build (same as immutable-sbc's build-deps.yml): the kmod
 # build runs only when deps/ changes or on its own schedule.
 #
-# build.yml calls this workflow (its job deps) for a push that changed deps/
-# and builds the system image after it, in the same run. On its own: the
-# schedule (publishes only a new kernel or driver) and by hand.
+# build.yml calls this workflow (its job deps) -- for a push that changed
+# deps/ and on its schedule (publishing then only a new kernel or driver) --
+# and builds the system image after it, in the same run. On its own: by hand.
 
 on:
   workflow_call:
-  schedule:
-    # A day before build.yml's own (0 10 1,15 * *): a new kernel or driver is
-    # in the deps image by the time the system image is built.
-    - cron: "0 10 14,28 * *"
   workflow_dispatch:
 
 env:
@@ -70,7 +66,8 @@ jobs:
           podman rm -f "${cid}" >/dev/null
           echo "tag=${DEFAULT_TAG}-${KVER}-${NVIDIA}" >> "$GITHUB_OUTPUT"
 
-      # A scheduled run publishes only if the kernel or the driver moved. The
+      # A scheduled run (build.yml's schedule; called, github.event_name is
+      # the caller's) publishes only if the kernel or the driver moved. The
       # image is FROM scratch (nothing to run): its two version files are
       # copied out of a created container.
       - name: Check whether the kernel or the driver changed

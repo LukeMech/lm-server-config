@@ -28,9 +28,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Did this push change the deps image (deps/, build-deps.yml)? Then it's
-  # rebuilt first, in this very run (job deps), and build_push builds on it.
-  # A new branch counts what it changed against the default branch.
+  # Rebuild the deps image first, in this very run (job deps), and build the
+  # system image on it: on the schedule (a new kernel or driver -- published
+  # only then), and for a push that changed deps/ or build-deps.yml (a new
+  # branch counts what it changed against the default branch).
   changes:
     name: Check for deps changes
     runs-on: ubuntu-latest
@@ -42,7 +43,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Diff deps/ against the previous push
+      - name: Schedule, or deps/ changed since the previous push
         id: diff
         env:
           EVENT: ${{ github.event_name }}
@@ -50,6 +51,10 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          if [[ "${EVENT}" == "schedule" ]]; then
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "${EVENT}" != "push" ]]; then
             echo "deps=false" >> "$GITHUB_OUTPUT"
             exit 0
