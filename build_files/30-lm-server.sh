@@ -3,7 +3,7 @@
 set -ouex pipefail
 
 # Git on Windows may drop the exec bit -- set it explicitly.
-chmod 0755 /usr/bin/lm-server /usr/libexec/lm-server/*.sh /usr/libexec/lm-server/render.py /usr/libexec/lm-server/containers.py /usr/libexec/lm-server/resources.py /usr/libexec/lm-server/provision/*.sh
+chmod 0755 /usr/bin/lm-server /usr/libexec/lm-server/*.sh /usr/libexec/lm-server/render.py /usr/libexec/lm-server/containers.py /usr/libexec/lm-server/image_sources.py /usr/libexec/lm-server/resources.py /usr/libexec/lm-server/provision/*.sh
 
 # sudo ignores a drop-in that isn't 0440; a syntax error would lock sudo out.
 chmod 0440 /etc/sudoers.d/lm-server-wheel

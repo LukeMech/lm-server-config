@@ -30,6 +30,9 @@ With no custom renderer below, [<name>] in lm-server.toml renders to
 env/<name>/<name>.env (point the quadlet's EnvironmentFile= there):
 `env` defaults < top-level keys (api_secret -> API_SECRET) < `env = {...}`;
 `users = [...]` goes to env/<name>/users.json for provision/<name>.sh.
+`versions = { <container> = "<tag>" }` (its name without "<name>-", e.g. db
+for remote-db) runs that tag of the quadlet's image instead of its own;
+a container left out keeps the quadlet's tag.
 
 A renderer may also write quadlet/<unit>.conf (e.g. immich-server.container.conf):
 lm-server installs it as a drop-in of that quadlet,
@@ -53,11 +56,10 @@ QUADLETS = os.environ.get("LMS_QUADLET_DIR", "/usr/share/containers/systemd")
 # of that size (lm-server moves the data on a change).
 VOLUMES = "/var/lib/lm-server/volumes"
 CACHE = "/var/lib/lm-server/cache"
-GUAC_IMAGE = "docker.io/guacamole/guacamole:1.6.0"
 CHECK_ONLY = False  # `check`: validate without side effects (no podman)
 
 # Keys of a service section lm-server handles itself (never passed as env).
-RESERVED = {"storage", "disk", "cpus", "memory", "env", "users"}
+RESERVED = {"storage", "disk", "cpus", "memory", "env", "users", "versions"}
 
 # Services that are part of the system rather than quadlets.
 BUILTIN = {
@@ -68,6 +70,7 @@ BUILTIN = {
         "env": {},
         "require": ["TUNNEL_TOKEN"],
         "volumes": [],
+        "images": {},
     },
 }
 
@@ -93,12 +96,17 @@ def catalog():
         units = [f"{pods[0]}-pod"] if pods else containers
         if not units:
             continue
-        spec = {"desc": name, "units": units, "routes": {}, "env": {}, "require": [], "volumes": []}
+        # images: {key in `versions`: (quadlet file, its Image=)}
+        spec = {"desc": name, "units": units, "routes": {}, "env": {}, "require": [], "volumes": [], "images": {}}
         vol = re.compile(rf"^Volume={re.escape(VOLUMES)}/{re.escape(name)}(/[^:]*)?:")
         for f in files:
             with open(os.path.join(d, f), encoding="utf-8") as fh:
                 for line in fh:
                     line = line.strip()
+                    if f.endswith(".container") and line.startswith("Image="):
+                        key = f[: -len(".container")].removeprefix(f"{name}-") or name
+                        spec["images"][key] = (f, line[len("Image="):])
+                        continue
                     m = vol.match(line)
                     if m:
                         sub = (m.group(1) or "").strip("/") or "."
@@ -271,6 +279,47 @@ def size(sec, out, where):
     out.write("disk", f"{m[1]}{m[2]}\n")  # rendered as "disk" (the size)
 
 
+TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+
+
+def versions(sec, where):
+    result = sec.get("versions", {})
+    if not isinstance(result, dict):
+        raise ConfigError(f'{where}.versions must be a table, e.g. {{ db = "16" }}')
+    return result
+
+
+def image(spec, sec, key, where):
+    """The image the `key` container runs: its quadlet's, with the tag from
+    `versions` if that names one."""
+    base = spec["images"][key][1]
+    tag = versions(sec, where).get(key)
+    if tag is None:
+        return base
+    if not isinstance(tag, str) or not TAG.fullmatch(tag):
+        raise ConfigError(f'{where}.versions.{key} must be an image tag, e.g. "16" or "latest" (got \'{tag}\')')
+    repo = base.split("@", 1)[0]
+    if ":" in repo.rsplit("/", 1)[-1]:
+        repo = repo.rsplit(":", 1)[0]
+    return f"{repo}:{tag}"
+
+
+def images(spec, sec, out, where):
+    """versions = { ... } -> an Image= drop-in for each container it names
+    (unless the service's renderer has set that container's image itself)."""
+    for key in versions(sec, where):
+        if key not in spec["images"]:
+            known = ", ".join(sorted(spec["images"])) or "none"
+            raise ConfigError(f"{where}.versions.{key}: no such container (these are: {known})")
+        rel = f"quadlet/{spec['images'][key][0]}.conf"
+        path = os.path.join(out.root, rel)
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                if re.search(r"^Image=", f.read(), re.M):
+                    continue
+        out.write(rel, f"[Container]\nImage={image(spec, sec, key, where)}\n", mode="a")
+
+
 # ---------------------------------------------------------------- renderers
 
 
@@ -397,9 +446,10 @@ def r_immich(name, spec, sec, out, ctx):
             "[Container]\n"
             "AddDevice=nvidia.com/gpu=all\n"
         )
+        # Its -cuda image, of the tag in `versions` (or the quadlet's).
         out.write(
             "quadlet/immich-machine-learning.container.conf",
-            cdi + "Image=ghcr.io/immich-app/immich-machine-learning:release-cuda\n",
+            cdi + f"Image={image(spec, sec, 'machine-learning', name)}-cuda\n",
         )
         out.write("quadlet/immich-server.container.conf", cdi)
 
@@ -437,12 +487,15 @@ def r_remote(name, spec, sec, out, ctx):
     out.json("users.json", users(sec, name, ["login", "password"]))
     if CHECK_ONLY:
         return
-    # DB schema, generated once per Guacamole version by the image's own script.
-    cache = os.path.join(CACHE, f"guacamole-initdb-{GUAC_IMAGE.rsplit(':', 1)[1]}.sql")
+    # DB schema, generated once per Guacamole version by the image's own script
+    # (only read when the database is created: a later version's schema
+    # changes are applied by hand, from its release notes).
+    guac = image(spec, sec, "guacamole", name)
+    cache = os.path.join(CACHE, f"guacamole-initdb-{guac.rsplit(':', 1)[1]}.sql")
     if not os.path.exists(cache) or os.path.getsize(cache) == 0:
         os.makedirs(CACHE, exist_ok=True)
         sql = subprocess.run(
-            ["podman", "run", "--rm", GUAC_IMAGE, "/opt/guacamole/bin/initdb.sh", "--postgresql"],
+            ["podman", "run", "--rm", guac, "/opt/guacamole/bin/initdb.sh", "--postgresql"],
             check=True, capture_output=True, text=True,
         ).stdout
         with open(cache, "w", encoding="utf-8") as f:
@@ -509,6 +562,7 @@ def cmd_render(toml_path, out_root):
                 raise ConfigError(f"[{name}] must be a table")
             no_placeholders(sec, name)
             CUSTOM.get(name, r_generic)(name, spec, sec, out, ctx)
+            images(spec, sec, out, name)
             volumes(out, *spec["volumes"])
             location(sec, out, name, taken)
             size(sec, out, name)

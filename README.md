@@ -87,8 +87,24 @@ containers, then the system image (downloaded; it switches on the next reboot).
 | What | How | When |
 |---|---|---|
 | System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
-| Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart), `lm-server containers` (running vs. available versions), Cockpit | `[updates] containers`, default `"daily"` |
+| Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart; then the containers that follow a file upstream), `lm-server containers` (running vs. available versions), Cockpit | `[updates] containers`, default `"daily"` |
 | Configs (lm-server.toml) | `lm-server config pull` (= `sync`), `lm-server config status`, Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
+
+**Versions**: `versions = { <container> = "<tag>" }` in a service's section
+sets the image tag of its containers, keyed by the container name without
+`<service>-` (`[remote] versions = { db = "16", guacamole = "1.6.0" }`). A
+container left out runs the tag its quadlet ships: `latest` (or `release`),
+or a pinned major where the data depends on it (Postgres, MongoDB). A
+floating tag (`latest`, `16`, `8.0`) is auto-updated within it; a full
+version (`1.6.0`) stays put. lm-server writes it as a drop-in,
+`/etc/containers/systemd/<unit>.d/lm-server-<service>.conf`.
+
+**Following upstream**: Immich's database runs the image named in the
+`docker-compose.yml` of the Immich release the server runs
+(`Label=lm-server.source=...` on its quadlet). After each container update
+`image_sources.py` reads that file and switches the database to it (a drop-in,
+`image-source.conf`; never to another Postgres major). Cockpit shows it as
+*Up to date* with a *Source* link to the file. A version in `versions` wins.
 
 **Editing the config from Cockpit**: *Configuration (lm-server.toml)* loads
 the file from the secrets repo. *Save, push & apply* checks it, commits and
@@ -101,37 +117,6 @@ Schedules are systemd timers, not cron. They take calendar expressions like
 `"daily"`, `"Sun 04:00"` or `"*-*-01 03:00"`. Check one with
 `systemd-analyze calendar "Sun 04:00"`. `lm-server status` shows the next run of
 each timer, and Cockpit > Management > *Automatic runs* shows what they did.
-
-### Upgrading from Fedora (v44.x) to AlmaLinux (v10.x)
-
-A server installed from a Fedora release (`v44.*`) can't just upgrade to an
-AlmaLinux one (`v10.*`). The new deployment never finalizes. After the reboot
-the server is back on Fedora, and `ostree-boot-complete.service` fails with:
-
-```
-ostree-finalize-staged.service failed on previous boot: Finalizing deployment:
-Finalizing SELinux policy: failed to run semodule: Child process exited with code 1
-```
-
-The Fedora side runs the finalizing, and its systemd has no `/usr/sbin` in
-`PATH` (Fedora merged it into `/usr/bin`). AlmaLinux has `semodule` only in
-`/usr/sbin`, so it isn't found (`journalctl -b -1 -u ostree-finalize-staged`:
-`execvp semodule: No such file or directory`). Once, before the upgrade, give
-that service a `PATH` with `/usr/sbin`:
-
-```sh
-sudo mkdir -p /etc/systemd/system/ostree-finalize-staged.service.d
-printf '[Service]\nEnvironment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\n' |
-  sudo tee /etc/systemd/system/ostree-finalize-staged.service.d/10-path.conf
-sudo systemctl daemon-reload
-sudo lm-server upgrade --apply
-```
-
-It has to be in place before `upgrade --apply`, because the service starts
-when the new deployment is staged. After the reboot on AlmaLinux, the drop-in
-is no longer needed:
-`sudo rm -r /etc/systemd/system/ostree-finalize-staged.service.d`.
-`lm-server rollback` still goes back to Fedora.
 
 ## NVIDIA GPU
 

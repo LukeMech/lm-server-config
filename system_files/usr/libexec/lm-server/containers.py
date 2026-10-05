@@ -7,11 +7,15 @@ PODMAN_SYSTEMD_UNIT). For each: its image, the version it runs now
 (org.opencontainers.image.version, build date, digest) and -- if the registry
 has a newer one -- the same for that image. "Newer" is podman auto-update's
 own verdict (--dry-run); skopeo only fetches the details of those images.
+A container with a source (image_sources.py) is compared with the image its
+source names instead ("source": the file's URL).
 """
 import json
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+
+import image_sources
 
 VERSION_LABELS = ("org.opencontainers.image.version", "version")
 
@@ -50,10 +54,12 @@ def containers():
             "image": c.get("Image", ""),
             "image_id": c.get("ImageID", ""),
             "state": c.get("State", ""),
+            "labels": labels,
             "policy": labels.get("io.containers.autoupdate", ""),
             "update": None,  # "pending" | "false" | None (no auto-update policy / unknown)
             "current": {},
             "available": None,
+            "source": "",
             "error": "",
         })
     return result
@@ -96,6 +102,9 @@ def main(argv):
         ids = sorted({c["image_id"] for c in items if c["image_id"]})
         local = dict(zip(ids, pool.map(lambda i: run("podman", "image", "inspect", i, timeout=60), ids)))
         reports, error = check.result() if check else ({}, "")
+        for c in image_sources.check(items, fetch=check_registry):
+            if c["wanted"]:
+                c["update"] = "false" if c["wanted"] == c["image"] else "pending"
 
         for c in items:
             out = local.get(c["image_id"])
@@ -108,7 +117,8 @@ def main(argv):
                 c["error"] = error.splitlines()[-1]
 
         # Details of the images auto-update would pull (one lookup per image).
-        pending = sorted({c["image"] for c in items if c["update"] == "pending"})
+        target = lambda c: c.get("wanted") or c["image"]
+        pending = sorted({target(c) for c in items if c["update"] == "pending"})
         found = {}
         for image, fut in [(i, pool.submit(remote, i)) for i in pending]:
             try:
@@ -116,8 +126,10 @@ def main(argv):
             except (RuntimeError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as ex:
                 found[image] = {"error": str(ex)}
         for c in items:
-            if c["image"] in found:
-                c["available"] = found[c["image"]]
+            if c["update"] == "pending" and target(c) in found:
+                c["available"] = dict(found[target(c)], image=target(c))
+            for k in ("labels", "wanted", "pinned"):
+                c.pop(k, None)
 
     items.sort(key=lambda c: (c["service"], c["container"]))
     if as_json:
@@ -135,7 +147,8 @@ def main(argv):
     print(f"{'SERVICE':<10} {'CONTAINER':<26} {'CURRENT':<34} AVAILABLE")
     for c in items:
         avail = ver(c["available"]) if c["update"] == "pending" else (
-            "up to date" if c["update"] == "false" else (c["error"] or "not auto-updated"))
+            ("up to date" + (" (source)" if c["source"] else "")) if c["update"] == "false"
+            else (c["error"] or "not auto-updated"))
         print(f"{c['service']:<10} {c['container']:<26} {ver(c['current']):<34} {avail}")
     print(f"\n{sum(c['update'] == 'pending' for c in items)} of {len(items)} containers have an update"
           " (lm-server update pulls them).")

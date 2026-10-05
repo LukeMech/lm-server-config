@@ -938,7 +938,10 @@ cmd_upgrade() {
 
 cmd_update() {
     case ${1:-} in
-    --dry-run | --check) podman auto-update --dry-run ;;
+    --dry-run | --check)
+        podman auto-update --dry-run
+        "${LMS_LIBEXEC}/image_sources.py"
+        ;;
     "")
         # Restarts services: must not die halfway with a Cockpit session
         # (see run_detached).
@@ -947,6 +950,7 @@ cmd_update() {
             return
         fi
         podman auto-update
+        "${LMS_LIBEXEC}/image_sources.py" --apply
         ;;
     *) lms_die "update: unknown argument $1" ;;
     esac

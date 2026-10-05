@@ -6,7 +6,7 @@ ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
 ContainerName=sugar-mongo
 Pod=sugar.pod
 # The major MongoDB Atlas runs (what most Nightscouts use); within it
-# auto-updated. Older data is stepped up to it before the start.
+# auto-updated. Another major needs its data upgraded by hand.
 Image=docker.io/library/mongo:8.0
 AutoUpdate=registry
 Volume=/var/lib/lm-server/volumes/sugar/mongo:/data/db:Z
@@ -14,7 +14,6 @@ NoNewPrivileges=true
 
 [Service]
 Slice=lm-server-sugar.slice
-ExecStartPre=/usr/libexec/lm-server/mongo-upgrade.sh sugar-mongo /var/lib/lm-server/volumes/sugar/mongo 8.0
 Restart=always
 TimeoutStartSec=900
 

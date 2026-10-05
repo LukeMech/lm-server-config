@@ -53,6 +53,11 @@ adhoc_ephemeral = true
 #                             (its own LV). Needs no LVM.
 #   cpus = 2                  CPU cores (may be 0.5)
 #   memory = "4G"             RAM (the service is restarted if it goes over)
+#   versions = { db = "16" }  the image tag of a container (its name without
+#                             "<service>-": db = remote-db). Left out: the
+#                             tag the image ships (latest, or a pinned major
+#                             where the data format depends on it). Floating
+#                             tags ("latest", "16") are auto-updated.
 #
 # Change any of them any time: for disk/storage lm-server stops the service,
 # copies the data over and starts it again (the old copy stays). Leave a key
@@ -79,6 +84,7 @@ shares = ["files"]
 syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 # More FileBrowser users:
 # users = [ { login = "jan", password = "CHANGE_ME" } ]
+# versions = { filebrowser = "latest", syncthing = "latest" }
 
 # Web apps: repo/port are built in; the code is cloned with the GitHub token
 # from `lm-server setup`. Optional: branch = "...", github_token = "...".
@@ -91,6 +97,8 @@ memory = "512M"
 storage = "1G"
 cpus = 0.5
 memory = "512M"
+
+# versions = { toolbox = "latest" } (and website / exp alike)
 
 [exp]
 storage = "1G"
@@ -107,6 +115,7 @@ memory = "2G"
 jwt_secret = "CHANGE_ME"
 users = [{ email = "you@example.com", password = "CHANGE_ME" }]
 # Any ConvertX setting: env = { AUTO_DELETE_EVERY_N_HOURS = "24" }
+# versions = { convert = "latest" }
 
 [immich]
 disk = "/var/mnt/hdd-mirror/immich" # HDD RAID 1
@@ -121,6 +130,10 @@ env = { TZ = "Europe/Warsaw" }
 # machine learning on CUDA, the server for NVENC transcoding (switch that on
 # in Immich > Administration > Video Transcoding > Hardware Acceleration).
 # gpu = "nvidia"
+# Server and machine learning follow Immich's releases ("release"); the
+# database follows the compose file of the running release (set it here only
+# to override that -- it pins it).
+# versions = { server = "release", machine-learning = "release", redis = "9-alpine" }
 
 [remote]
 storage = "2G"
@@ -129,10 +142,16 @@ memory = "1536M" # Guacamole is Java
 db_password = "CHANGE_ME"
 # An admin disables the default guacadmin account.
 users = [{ login = "lukasz", password = "CHANGE_ME", admin = true }]
+# guacamole and guacd always the same version; a new one may need its DB
+# schema upgrade applied by hand (Guacamole release notes). Postgres: a new
+# major needs a dump/restore.
+versions = { db = "16", guacamole = "1.6.0", guacd = "1.6.0" }
 
 [sugar]
 storage = "5G" # Nightscout's MongoDB
 cpus = 1
 memory = "1G"
 api_secret = "CHANGE_ME" # min. 12 characters
+# MongoDB: what Atlas runs; a new major needs its data upgraded by hand.
+versions = { mongo = "8.0", nightscout = "latest" }
 env = { DISPLAY_UNITS = "mg/dl", ENABLE = "careportal basal iob cob bridge", AUTH_DEFAULT_ROLES = "denied", TZ = "Europe/Warsaw" }

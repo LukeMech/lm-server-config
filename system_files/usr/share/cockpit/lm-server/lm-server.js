@@ -491,10 +491,12 @@ function renderContainers() {
     let prev = null;
     tbody.innerHTML = state.ctr.map(c => {
         let avail;
-        if (c.update === "pending") avail = `<span class="badge info">Update</span> ${imgText(c.available)}`;
-        else if (c.update === "false") avail = `<span class="badge ok">Up to date</span>`;
+        // Following a file upstream (e.g. Immich's compose): a link to it.
+        const src = c.source ? ` <a class="badge" href="${esc(c.source)}" target="_blank" rel="noopener noreferrer">Source</a>` : "";
+        if (c.update === "pending") avail = `<span class="badge info">Update</span>${src} ${imgText(c.available)}`;
+        else if (c.update === "false") avail = `<span class="badge ok">Up to date</span>${src}`;
         else if (c.error) avail = `<span class="badge warn">Unknown</span><span class="sub">${esc(c.error)}</span>`;
-        else if (c.policy) avail = `<span class="badge">Not checked yet</span>`;
+        else if (c.policy || c.source) avail = `<span class="badge">Not checked yet</span>${src}`;
         else avail = `<span class="badge">Not auto-updated</span>`;
         const first = c.service !== prev;
         prev = c.service;

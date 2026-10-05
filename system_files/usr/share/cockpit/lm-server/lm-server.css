@@ -240,6 +240,8 @@ table.deployments .row-actions { text-align: right; }
 .badge.ok { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .badge.info { border-color: var(--accent); color: var(--accent); }
 .badge.warn { border-color: var(--warn); color: var(--warn); }
+a.badge { text-decoration: none; }
+a.badge:hover { border-color: var(--accent); color: var(--accent); }
 
 textarea#config-text {
     display: block;
