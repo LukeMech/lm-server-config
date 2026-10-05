@@ -6,6 +6,7 @@ ConditionPathExists=/var/lib/lm-server/env/remote/enabled
 ContainerName=remote-guacd
 Pod=remote.pod
 Image=docker.io/guacamole/guacd:1.6.0
+AutoUpdate=registry
 NoNewPrivileges=true
 
 [Service]

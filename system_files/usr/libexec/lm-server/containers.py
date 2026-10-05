@@ -102,9 +102,6 @@ def main(argv):
         ids = sorted({c["image_id"] for c in items if c["image_id"]})
         local = dict(zip(ids, pool.map(lambda i: run("podman", "image", "inspect", i, timeout=60), ids)))
         reports, error = check.result() if check else ({}, "")
-        for c in image_sources.check(items, fetch=check_registry):
-            if c["wanted"]:
-                c["update"] = "false" if c["wanted"] == c["image"] else "pending"
 
         for c in items:
             out = local.get(c["image_id"])
@@ -115,6 +112,10 @@ def main(argv):
                 c["update"] = str(r.get("Updated", "")).lower()
             elif c["policy"] and error:
                 c["error"] = error.splitlines()[-1]
+        # A source naming another image beats the registry's verdict on this one.
+        for c in image_sources.check(items, fetch=check_registry):
+            if c["wanted"] and c["wanted"] != c["image"]:
+                c["update"] = "pending"
 
         # Details of the images auto-update would pull (one lookup per image).
         target = lambda c: c.get("wanted") or c["image"]

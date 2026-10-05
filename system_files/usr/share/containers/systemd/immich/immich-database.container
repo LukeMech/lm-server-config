@@ -8,6 +8,7 @@ Pod=immich.pod
 # The image Immich's compose names for the Immich server running here
 # (image_sources.py, after every container update); this one until then.
 Image=ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+AutoUpdate=registry
 Label=lm-server.source=https://github.com/immich-app/immich/releases/download/{immich-server}/docker-compose.yml
 EnvironmentFile=/var/lib/lm-server/env/immich/database.env
 Environment=POSTGRES_INITDB_ARGS=--data-checksums

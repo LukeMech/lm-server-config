@@ -7,8 +7,11 @@ After=remote-db.service remote-guacd.service
 [Container]
 ContainerName=remote-guacamole
 Pod=remote.pod
-# Pinned together with guacd: the DB schema follows the release.
+# Pinned together with guacd: the DB schema follows the release. Auto-updated
+# all the same: nothing new comes under a full version, but a floating tag in
+# `versions` follows its tag.
 Image=docker.io/guacamole/guacamole:1.6.0
+AutoUpdate=registry
 EnvironmentFile=/var/lib/lm-server/env/remote/guacamole.env
 NoNewPrivileges=true
 
