@@ -6,6 +6,7 @@ ConditionPathExists=/var/lib/lm-server/env/remote/enabled
 ContainerName=remote-db
 Pod=remote.pod
 Image=docker.io/library/postgres:16
+AutoUpdate=registry
 EnvironmentFile=/var/lib/lm-server/env/remote/database.env
 Volume=/var/lib/lm-server/volumes/remote/postgres:/var/lib/postgresql/data:Z
 # Guacamole schema (rendered by lm-server) -- only read on first init.
