@@ -44,15 +44,21 @@ def split(image):
     return repo, tag
 
 
-def versions():
-    """{container name: version its image is labelled with}."""
-    out = run("podman", "ps", "-a", "--format", "{{.Names}} {{.ImageID}}", timeout=60)
-    names = dict(line.split(" ", 1) for line in out.stdout.splitlines() if " " in line)
+def versions(items):
+    """{container name: version its image is labelled with} of the containers
+    (dicts with container, image_id) -- read like `lm-server containers` does."""
+    ids = sorted({c["image_id"] for c in items if c.get("image_id")})
+    out = run("podman", "image", "inspect", *ids, timeout=60) if ids else None
+    labels = {}
+    if out is not None and out.stdout.strip():
+        for data in json.loads(out.stdout) or []:
+            for i in ids:
+                if data.get("Id", "").startswith(i) or i.startswith(data.get("Id") or "-"):
+                    labels[i] = data.get("Labels") or data.get("Config", {}).get("Labels") or {}
     result = {}
-    for name, image_id in names.items():
-        o = run("podman", "image", "inspect", "--format", "{{json .Labels}}", image_id, timeout=60)
-        labels = (json.loads(o.stdout or "null") or {}) if o.returncode == 0 else {}
-        result[name] = next((labels[k] for k in VERSION_LABELS if labels.get(k)), "")
+    for c in items:
+        lab = labels.get(c.get("image_id"), {})
+        result[c["container"]] = next((lab[k] for k in VERSION_LABELS if lab.get(k)), "")
     return result
 
 
@@ -60,7 +66,7 @@ def resolve(template, vers):
     """The source URL with {<container>} filled in, or raise if one isn't known."""
     def fill(m):
         if not vers.get(m.group(1)):
-            raise RuntimeError(f"version of {m.group(1)} unknown")
+            raise RuntimeError(f"version of {m.group(1)} unknown (no such container, or its image has no version label)")
         return vers[m.group(1)]
     return re.sub(r"\{([^}]+)\}", fill, template)
 
@@ -94,12 +100,13 @@ def pinned(unit):
 
 
 def check(items, fetch=True):
-    """Fills in source/wanted/pinned/error of each container dict (name, image,
-    unit, labels) that has a source. fetch=False: only the source's URL."""
+    """Fills in source/wanted/pinned/error of each container dict (container,
+    image, image_id, unit, labels) that has a source. fetch=False: only the
+    source's URL."""
     sourced = [c for c in items if (c.get("labels") or {}).get(LABEL)]
     if not sourced:
         return []
-    vers = versions()
+    vers = versions(items)
     for c in sourced:
         c["source"], c["wanted"], c["error"] = "", "", ""
         c["pinned"] = pinned(c["unit"])
@@ -117,8 +124,9 @@ def containers():
     if out.returncode:
         raise RuntimeError(out.stderr.strip() or "podman ps failed")
     return [{
-        "name": (c.get("Names") or [""])[0],
+        "container": (c.get("Names") or [""])[0],
         "image": c.get("Image", ""),
+        "image_id": c.get("ImageID", ""),
         "unit": (c.get("Labels") or {}).get("PODMAN_SYSTEMD_UNIT", ""),
         "labels": c.get("Labels") or {},
     } for c in json.loads(out.stdout or "[]")]
@@ -149,20 +157,20 @@ def main(argv):
         return 1
     for c in items:
         if c["pinned"]:
-            print(f"{c['name']}: {c['image']} (set in lm-server.toml)")
+            print(f"{c['container']}: {c['image']} (set in lm-server.toml)")
         elif c["error"]:
-            print(f"lm-server: {c['name']}: {c['error']}", file=sys.stderr)
-            rc = 1
+            # Left as it is: a warning, not a failed update.
+            print(f"lm-server: warning: {c['container']}: {c['error']}", file=sys.stderr)
         elif c["wanted"] == c["image"]:
-            print(f"{c['name']}: {c['image']} (as its source)")
+            print(f"{c['container']}: {c['image']} (as its source)")
         elif not do_apply:
-            print(f"{c['name']}: {c['image']} -> {c['wanted']} (source: {c['source']})")
+            print(f"{c['container']}: {c['image']} -> {c['wanted']} (source: {c['source']})")
         else:
-            print(f"lm-server: {c['name']}: {c['image']} -> {c['wanted']}", file=sys.stderr)
+            print(f"lm-server: {c['container']}: {c['image']} -> {c['wanted']}", file=sys.stderr)
             try:
                 apply(c)
             except (RuntimeError, OSError, subprocess.TimeoutExpired) as ex:
-                print(f"lm-server: {c['name']}: {ex}", file=sys.stderr)
+                print(f"lm-server: {c['container']}: {ex}", file=sys.stderr)
                 rc = 1
     return rc
 
