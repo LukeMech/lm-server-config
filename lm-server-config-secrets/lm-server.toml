@@ -92,13 +92,13 @@ syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 storage = "1G"
 cpus = 0.5
 memory = "512M"
+# versions = { toolbox = "latest" }
 
 [website]
 storage = "1G"
 cpus = 0.5
 memory = "512M"
-
-# versions = { toolbox = "latest" } (and website / exp alike)
+# versions = { website = "latest" }
 
 [exp]
 storage = "1G"
@@ -107,6 +107,7 @@ memory = "1G"
 # CV PDF compressed through iLovePDF (developer.ilovepdf.com, free plan);
 # leave it out to serve it uncompressed.
 # ilovepdf_public_key = "project_public_..."
+# versions = { exp = "latest" }
 
 [convert]
 storage = "10G" # uploads and conversions
@@ -130,10 +131,10 @@ env = { TZ = "Europe/Warsaw" }
 # machine learning on CUDA, the server for NVENC transcoding (switch that on
 # in Immich > Administration > Video Transcoding > Hardware Acceleration).
 # gpu = "nvidia"
-# Server and machine learning follow Immich's releases ("release"); the
-# database follows the compose file of the running release (set it here only
-# to override that -- it pins it).
-# versions = { server = "release", machine-learning = "release", redis = "9-alpine" }
+# Server and machine learning follow Immich's releases ("release"; with gpu
+# the -cuda image of the tag); the database follows the compose file of the
+# running release -- set database only to pin it instead.
+# versions = { server = "release", machine-learning = "release", redis = "9-alpine", database = "14-vectorchord0.4.3-pgvectors0.2.0" }
 
 [remote]
 storage = "2G"
@@ -145,7 +146,7 @@ users = [{ login = "lukasz", password = "CHANGE_ME", admin = true }]
 # guacamole and guacd always the same version; a new one may need its DB
 # schema upgrade applied by hand (Guacamole release notes). Postgres: a new
 # major needs a dump/restore.
-versions = { db = "16", guacamole = "1.6.0", guacd = "1.6.0" }
+# versions = { db = "16", guacamole = "1.6.0", guacd = "1.6.0" }
 
 [sugar]
 storage = "5G" # Nightscout's MongoDB
@@ -153,5 +154,5 @@ cpus = 1
 memory = "1G"
 api_secret = "CHANGE_ME" # min. 12 characters
 # MongoDB: what Atlas runs; a new major needs its data upgraded by hand.
-versions = { mongo = "8.0", nightscout = "latest" }
+# versions = { mongo = "8.0", nightscout = "latest" }
 env = { DISPLAY_UNITS = "mg/dl", ENABLE = "careportal basal iob cob bridge", AUTH_DEFAULT_ROLES = "denied", TZ = "Europe/Warsaw" }
