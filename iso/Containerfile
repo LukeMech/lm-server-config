@@ -64,8 +64,12 @@ COPY iso/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
 COPY iso/anaconda.conf /etc/anaconda/conf.d/90-lm-server.conf
 
 # What lorax normally does to make Anaconda run, the bare minimum: the
-# "install" user runs Anaconda, boot into anaconda.target, a shell on VT2.
-RUN echo "install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda" >> /etc/passwd \
+# product info (/.buildstamp -- without IsFinal=True Anaconda warns it's
+# "pre-release / testing" software), the "install" user runs Anaconda, boot
+# into anaconda.target, a shell on VT2.
+RUN printf '[Main]\nProduct=LM-Server\nVersion=%s\nIsFinal=True\nBugURL=https://github.com/LukeMech/lm-server-config/issues\nUUID=%s.%s\n' \
+        "$(. /etc/os-release && echo "${VERSION_ID}")" "$(date -u +%Y%m%d%H%M)" "$(uname -m)" > /.buildstamp \
+    && echo "install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda" >> /etc/passwd \
     && echo "install::14438:0:99999:7:::" >> /etc/shadow \
     && passwd -d root
 RUN mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives \
