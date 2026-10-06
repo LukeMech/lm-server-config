@@ -5,9 +5,11 @@ ConditionPathExists=/var/lib/lm-server/env/sugar/enabled
 [Container]
 ContainerName=sugar-mongo
 Pod=sugar.pod
-# The major MongoDB Atlas runs (what most Nightscouts use); within it
-# auto-updated. Another major needs its data upgraded by hand.
-Image=docker.io/library/mongo:8.0
+# MongoDB 9.0, the major release (patched until October 2031): auto-updated
+# within 9.0.x, without the minor releases (9.1, 9.2, ...) that "9" would
+# follow. Never latest: the next major (10.0) needs the data's
+# featureCompatibilityVersion raised to 9.0 first, by hand.
+Image=docker.io/library/mongo:9.0
 AutoUpdate=registry
 Volume=/var/lib/lm-server/volumes/sugar/mongo:/data/db:Z
 NoNewPrivileges=true

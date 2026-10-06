@@ -153,6 +153,6 @@ storage = "5G" # Nightscout's MongoDB
 cpus = 1
 memory = "1G"
 api_secret = "CHANGE_ME" # min. 12 characters
-# MongoDB: what Atlas runs; a new major needs its data upgraded by hand.
-# versions = { mongo = "8.0", nightscout = "latest" }
+# MongoDB: a major release (9.0), not latest -- the next one needs its data upgraded by hand.
+# versions = { mongo = "9.0", nightscout = "latest" }
 env = { DISPLAY_UNITS = "mg/dl", ENABLE = "careportal basal iob cob bridge", AUTH_DEFAULT_ROLES = "denied", TZ = "Europe/Warsaw" }
