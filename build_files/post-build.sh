@@ -88,9 +88,10 @@ done
 # libdnf (C library) too, unless something else uses it (e.g. PackageKit).
 rpm -q libdnf &>/dev/null && { rpm -e libdnf || echo "libdnf kept: still required (see above)"; }
 rm -rf /etc/dnf /var/cache/dnf /var/lib/dnf
+hash -r # bash still remembers where dnf was (run above), file gone or not
 for c in dnf yum dnf5; do
-    if command -v "${c}" >/dev/null; then
-        echo "error: ${c} is still in the image" >&2
+    if path=$(command -v "${c}"); then
+        echo "error: ${c} is still in the image: ${path} ($(rpm -qf "${path}" 2>&1))" >&2
         exit 1
     fi
 done
