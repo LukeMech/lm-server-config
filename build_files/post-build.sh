@@ -72,3 +72,24 @@ chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"
 
 dnf -y clean all
 rm -rf /var/lib/dnf
+
+# dnf goes last: on the server only bootc changes packages (a new image,
+# `lm-server system update`), and /usr is read-only there anyway -- dnf could
+# at best install into a throwaway overlay. Without dnf nobody tries. Plain
+# `rpm -e`, no --nodeps: if anything else in the image still needs one of
+# these, the build fails here and says what. rpm itself stays (rpm -q, sos).
+dnf_pkgs=()
+for p in dnf dnf5 yum dnf-data dnf-automatic dnf-plugins-core python3-dnf \
+    python3-dnf-plugins-core python3-libdnf python3-hawkey libdnf5 libdnf5-cli; do
+    rpm -q "${p}" &>/dev/null && dnf_pkgs+=("${p}")
+done
+((${#dnf_pkgs[@]} == 0)) || rpm -e "${dnf_pkgs[@]}"
+# libdnf (C library) too, unless something else uses it (e.g. PackageKit).
+rpm -q libdnf &>/dev/null && { rpm -e libdnf || echo "libdnf kept: still required (see above)"; }
+rm -rf /etc/dnf /var/cache/dnf /var/lib/dnf
+for c in dnf yum dnf5; do
+    if command -v "${c}" >/dev/null; then
+        echo "error: ${c} is still in the image" >&2
+        exit 1
+    fi
+done
