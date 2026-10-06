@@ -6,7 +6,7 @@
 # lm-server: env INSECURE_USE_HTTP=true
 # lm-server: require API_SECRET
 # One unit for the whole service: `systemctl restart sugar-pod` (or
-# `lm-server restart sugar`) stops/starts every container below together.
+# `lm-server services restart sugar`) stops/starts every container below together.
 # Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
 [Unit]
 Description=sugar: Nightscout

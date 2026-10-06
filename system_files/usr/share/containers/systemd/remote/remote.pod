@@ -1,7 +1,7 @@
 # lm-server: description Apache Guacamole
 # lm-server: route remote.lukemech.org http://localhost:8443
 # One unit for the whole service: `systemctl restart remote-pod` (or
-# `lm-server restart remote`) stops/starts every container below together.
+# `lm-server services restart remote`) stops/starts every container below together.
 # Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
 [Unit]
 Description=remote: Apache Guacamole

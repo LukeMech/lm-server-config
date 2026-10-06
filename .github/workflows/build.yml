@@ -291,9 +291,9 @@ jobs:
           ## Update an existing server
 
           Cockpit > **Management** > update the system image, or from a shell:
-          \`sudo lm-server upgrade\` (staged, applied on the next reboot) /
-          \`sudo lm-server upgrade --apply\` (download and reboot now).
-          If the new image misbehaves: \`sudo lm-server rollback\`.
+          \`sudo lm-server system update\` (staged, applied on the next reboot) /
+          \`sudo lm-server system update --apply\` (download and reboot now).
+          If the new image misbehaves: \`sudo lm-server system rollback\`.
 
           ## Install a new server
 

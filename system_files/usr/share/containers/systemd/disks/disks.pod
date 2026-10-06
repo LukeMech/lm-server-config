@@ -2,7 +2,7 @@
 # lm-server: route disk.lukemech.org http://localhost:8001
 # lm-server: route syncdisks.lukemech.org http://localhost:8384
 # One unit for the whole service: `systemctl restart disks-pod` (or
-# `lm-server restart disks`) stops/starts every container below together.
+# `lm-server services restart disks`) stops/starts every container below together.
 # Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
 [Unit]
 Description=disks: FileBrowser Quantum + Syncthing

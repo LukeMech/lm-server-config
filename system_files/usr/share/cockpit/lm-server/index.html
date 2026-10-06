@@ -95,6 +95,7 @@
                 <div class="actions">
                     <button data-action="ctr-check">Check for updates</button>
                     <button class="primary" data-action="ctr-update">Update containers</button>
+                    <button data-action="ctr-cleanup">Clean up images</button>
                     <button data-action="prune">Remove ad-hoc containers</button>
                 </div>
             </header>
@@ -102,7 +103,7 @@
                 <thead><tr><th>Service</th><th>Container</th><th>Running</th><th>Available</th></tr></thead>
                 <tbody id="ctr-rows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
             </table>
-            <p class="hint" id="ctr-hint">Pulls newer images of every service and restarts only what changed. A service that fails to come back is rolled back to its previous image. Automatic updates: <code>[updates] containers</code>.</p>
+            <p class="hint" id="ctr-hint">Pulls newer images of every service and restarts only what changed. A service that fails to come back is rolled back to its previous image. Afterwards the images nothing uses any more are removed (also <em>Clean up images</em>). Automatic updates: <code>[updates] containers</code>.</p>
             <pre class="log" hidden></pre>
         </section>
 

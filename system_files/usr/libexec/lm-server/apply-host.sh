@@ -2,7 +2,7 @@
 # Applies [host] + [updates] of lm-server.toml (rendered to env/host/):
 # hostname, timezone, admin user, SSH keys, Cockpit origin, update schedules.
 # Every change is logged, and its short name printed on stdout (for the
-# summary of `lm-server sync`); stdout carries nothing else.
+# summary of `lm-server config pull`); stdout carries nothing else.
 set -euo pipefail
 . /usr/libexec/lm-server/lib.sh
 

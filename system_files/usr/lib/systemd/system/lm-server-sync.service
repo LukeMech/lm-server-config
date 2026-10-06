@@ -8,4 +8,4 @@ ConditionPathExists=/var/lib/lm-server/secrets.env
 Type=oneshot
 # Already a service: sync runs right here (see run_detached in lm-server).
 Environment=LMS_DETACHED=1
-ExecStart=/usr/bin/lm-server sync
+ExecStart=/usr/bin/lm-server config pull

@@ -3,7 +3,7 @@
 # TEMPLATE: copy into the private lm-server-config-secrets repo and replace every
 # CHANGE_ME. A service runs only if its [section] is present; delete a section
 # to stop that service. A section that still has CHANGE_ME (or misses a
-# required key) is not started -- `lm-server sync` / Cockpit says what's wrong.
+# required key) is not started -- `lm-server config pull` / Cockpit says what's wrong.
 # Changes are picked up on the [updates] config schedule (or at once with
 # `lm-server config pull` / Cockpit > Sync configs); only changed services restart.
 
@@ -62,7 +62,7 @@ adhoc_ephemeral = true
 # Change any of them any time: for disk/storage lm-server stops the service,
 # copies the data over and starts it again (the old copy stays). Leave a key
 # out for no limit. Current usage: Cockpit > Management > Services, or
-# `lm-server resources`.
+# `lm-server services resources`.
 
 [disks]
 disk = "/var/mnt/hdd-mirror/disks" # HDD RAID 1
@@ -87,7 +87,7 @@ syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 # versions = { filebrowser = "latest", syncthing = "latest" }
 
 # Web apps: repo/port are built in; the code is cloned with the GitHub token
-# from `lm-server setup`. Optional: branch = "...", github_token = "...".
+# from `lm-server config setup`. Optional: branch = "...", github_token = "...".
 [toolbox]
 storage = "1G"
 cpus = 0.5

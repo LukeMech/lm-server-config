@@ -169,7 +169,7 @@ function checkAll() {
     state.checking = true;
     publishStatus();
     render();
-    const sys = cockpit.spawn(["/usr/bin/lm-server", "upgrade", "--check"], root)
+    const sys = cockpit.spawn(["/usr/bin/lm-server", "system", "update", "--check"], root)
         .then(() => { state.sysChecked = new Date(); })
         .catch(() => { /* reported by loadSystem */ })
         .then(loadSystem);
@@ -317,7 +317,7 @@ function bar(el, stage, fraction, amount, detail) {
     el.querySelector(".bar").setAttribute("aria-valuenow", pct);
 }
 
-// `lm-server upgrade --progress` prints bootc's JSON Lines events between its
+// `lm-server system update --progress` prints bootc's JSON Lines events between its
 // normal output; they drive the bar, everything else goes to the log.
 const STAGES = { pulling: "Downloading", importing: "Importing", staging: "Staging" };
 function progressParser(el) {
@@ -356,9 +356,9 @@ function progressParser(el) {
 
 // ---- Update all: config -> containers -> system image (staged for reboot)
 const STEPS = [
-    { key: "config", label: "Config", args: ["sync"], busyText: "Applying lm-server.toml from GitHub…" },
-    { key: "containers", label: "Containers", args: ["update"], busyText: "Pulling newer images, restarting what changed…" },
-    { key: "system", label: "System image", args: ["upgrade", "--progress"], busyText: "Downloading the new image…" },
+    { key: "config", label: "Config", args: ["config", "pull"], busyText: "Applying lm-server.toml from GitHub…" },
+    { key: "containers", label: "Containers", args: ["containers", "update"], busyText: "Pulling newer images, restarting what changed, cleaning up…" },
+    { key: "system", label: "System image", args: ["system", "update", "--progress"], busyText: "Downloading the new image…" },
 ];
 const ICONS = { waiting: "○", running: "◐", done: "✔", failed: "✘" };
 
@@ -462,7 +462,7 @@ function sysUpgrade(apply) {
     return exclusive(async () => {
         const prog = $("sys-progress");
         bar(prog, "Checking…", 0, "", "");
-        const ok = await run(["upgrade", "--progress", ...(apply ? ["--apply"] : [])], $("system").querySelector(".log"), progressParser(prog));
+        const ok = await run(["system", "update", "--progress", ...(apply ? ["--apply"] : [])], $("system").querySelector(".log"), progressParser(prog));
         // --apply reboots right after staging: the connection just drops.
         const rebooting = apply && (ok || ["disconnected", "terminated"].includes(lastError?.problem));
         if (rebooting) return bar(prog, "Rebooting…", 1, "", "The server restarts into the new image; reload this page in a minute.");
@@ -539,7 +539,7 @@ let resourcesRunning = false;
 function loadResources(withDisk) {
     if (resourcesRunning) return Promise.resolve();
     resourcesRunning = true;
-    const args = ["/usr/bin/lm-server", "resources", "--json", ...(withDisk ? [] : ["--no-disk"])];
+    const args = ["/usr/bin/lm-server", "services", "resources", "--json", ...(withDisk ? [] : ["--no-disk"])];
     return cockpit.spawn(args, root)
         .then(out => {
             const prev = Object.fromEntries((resources || []).map(r => [r.service, r]));
@@ -730,7 +730,7 @@ const ACTIONS = {
     check: () => exclusive(checkAll),
     all: updateAll,
     "sys-check": () => exclusive(async () => {
-        if (await run(["upgrade", "--check"], $("system").querySelector(".log"))) state.sysChecked = new Date();
+        if (await run(["system", "update", "--check"], $("system").querySelector(".log"))) state.sysChecked = new Date();
         await loadSystem();
     }),
     "sys-download": () => sysUpgrade(false),
@@ -738,7 +738,7 @@ const ACTIONS = {
     "sys-rollback": () => {
         if (!window.confirm("Boot the previous system image on the next reboot?")) return;
         return exclusive(async () => {
-            await run(["rollback"], $("system").querySelector(".log"));
+            await run(["system", "rollback"], $("system").querySelector(".log"));
             await loadSystem();
         });
     },
@@ -748,11 +748,11 @@ const ACTIONS = {
         await loadContainers();
     }),
     "ctr-update": () => exclusive(async () => {
-        await run(["update"], $("containers").querySelector(".log"));
+        await run(["containers", "update"], $("containers").querySelector(".log"));
         await Promise.all([loadContainers(), loadResources(false)]);
     }),
     "cfg-sync": () => exclusive(async () => {
-        await run(["sync"], $("config").querySelector(".log"));
+        await run(["config", "pull"], $("config").querySelector(".log"));
         await Promise.all([loadConfig(), loadResources(false)]);
     }),
     "config-load": () => exclusive(configLoad),
@@ -760,10 +760,14 @@ const ACTIONS = {
     prune: () => {
         if (!window.confirm("Remove every container not defined by the system image?")) return;
         return exclusive(async () => {
-            await run(["prune-adhoc"], $("containers").querySelector(".log"));
+            await run(["containers", "remove-adhoc"], $("containers").querySelector(".log"));
             await loadResources(false);
         });
     },
+    "ctr-cleanup": () => exclusive(async () => {
+        await run(["containers", "cleanup"], $("containers").querySelector(".log"));
+        await loadResources(false);
+    }),
     resources: () => loadResources(true),
     history: loadHistory,
 };

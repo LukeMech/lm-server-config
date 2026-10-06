@@ -6,14 +6,14 @@ Wants=network-online.target
 After=network-online.target systemd-user-sessions.service
 # Holds tty1's login prompt until the repo can be read: the admin account comes
 # from lm-server.toml, so there is nobody to log in as before that. Changing it
-# later: Cockpit > lm-server or `sudo lm-server setup`.
+# later: Cockpit > lm-server or `sudo lm-server config setup`.
 Before=getty@tty1.service
 
 [Service]
 Type=oneshot
 # Already a service: sync runs right here (see run_detached in lm-server).
 Environment=LMS_DETACHED=1
-ExecStart=/usr/bin/lm-server setup --firstboot
+ExecStart=/usr/bin/lm-server config setup --firstboot
 StandardInput=tty
 StandardOutput=tty
 TTYPath=/dev/tty1

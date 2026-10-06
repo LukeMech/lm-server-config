@@ -1,7 +1,7 @@
 # lm-server: description Immich
 # lm-server: route immich.lukemech.org http://localhost:2283
 # One unit for the whole service: `systemctl restart immich-pod` (or
-# `lm-server restart immich`) stops/starts every container below together.
+# `lm-server services restart immich`) stops/starts every container below together.
 # Containers in a pod share localhost, so they talk to each other on 127.0.0.1.
 [Unit]
 Description=immich: Immich

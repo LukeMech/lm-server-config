@@ -10,7 +10,7 @@ After=network-online.target
 # Own slice, like every service (limits only via an explicit [cloudflared] section).
 Slice=lm-server-cloudflared.slice
 # TUNNEL_TOKEN = [host] cloudflare_tunnel_token. The published routes live in the
-# Cloudflare dashboard and point at http://localhost:<port> (`lm-server routes`).
+# Cloudflare dashboard and point at http://localhost:<port> (`lm-server services routes`).
 EnvironmentFile=/var/lib/lm-server/env/cloudflared/cloudflared.env
 ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
 Restart=always

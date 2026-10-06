@@ -9,37 +9,39 @@ usage() {
     cat <<'EOF'
 usage: lm-server <command> [args]
 
+  status                       system image, config, services, schedules
+  history [N]                  last N lines of the automatic runs
+  update [--config] [-c|--containers] [-s|--system] [--check] [--apply]
+                               update the config, the containers and the system
+                               image, in this order -- all three, or the ones
+                               named (-cs: containers + system). --check: only
+                               what's new. --apply: reboot into a new system image
+
 System (bootc image from ghcr.io/lukemech/lm-server)
-  status                 system image, config revision, services, schedules
-  history [N]            last N lines of automatic updates/syncs
-  upgrade [--check]      download the next system image (applied on reboot)
-  upgrade --apply        download it and reboot into it now
-  upgrade --progress ... the same, plus progress as JSON lines (Cockpit page)
-  rollback               boot the previous system image on next reboot
+  system update [--check]      download the next system image (applied on reboot)
+  system update --apply        download it and reboot into it now
+  system update --progress ... the same, plus progress as JSON lines (Cockpit)
+  system rollback              boot the previous system image on next reboot
 
 Containers (updated independently of the system)
-  update [--dry-run]     pull newer container images and restart what changed
-  containers [--json]    image + version each container runs, and available updates
+  containers [--json]          image + version each container runs, and what's newer
+  containers update [--check]  pull newer images, restart what changed, then clean up
+  containers cleanup           remove images no container or quadlet uses
+  containers remove-adhoc      remove containers not defined by this image
 
-Configs (private lm-server-config-secrets repo)
-  setup                  (re)enter the GitHub repo + credentials
-  sync [--force]         pull configs and apply them now
-  config pull            = sync: fetch changes pushed to GitHub and apply them
-  config show|save       print lm-server.toml / save a new one (stdin): commit, push, apply
-  config status          synced commit vs. the newest one on GitHub
+Config (private lm-server-config-secrets repo)
+  config setup                 (re)enter the GitHub repo + credentials
+  config pull [--force]        fetch changes pushed to GitHub and apply them
+  config show|save             print lm-server.toml / save a new one (stdin): commit, push, apply
+  config status                applied commit vs. the newest one on GitHub
 
 Services
-  services               list services and their state
-  resources [--json]     CPU / memory / disk of each service vs. its limits
-  start|stop|restart <service>
-  logs <service> [-f]
-  routes                 Cloudflare Tunnel routes this host expects
-  prune-adhoc            remove containers not defined by this image
+  services                     list services and their state
+  services start|stop|restart <service>
+  services logs <service> [-f]
+  services resources [--json]  CPU / memory / disk of each service vs. its limits
+  services routes              Cloudflare Tunnel routes this host expects
 EOF
-}
-
-need_root() {
-    [[ ${EUID} -eq 0 ]] || exec sudo -- "$0" "$@"
 }
 
 # ------------------------------------------------------------------ setup
@@ -85,7 +87,7 @@ cmd_setup() {
     while :; do
         attempt=$((attempt + 1))
         if ((!firstboot && attempt > 3)); then
-            lms_log "setup failed -- run: sudo lm-server setup"
+            lms_log "setup failed -- run: sudo lm-server config setup"
             return 1
         fi
         clear 2>/dev/null || true
@@ -108,7 +110,7 @@ EOF
         read -r -p "  Secrets repo (owner/name) [${def_repo}]: " repo || {
             # No terminal to ask on (stdin closed).
             echo
-            lms_log "no answer -- run: sudo lm-server setup"
+            lms_log "no answer -- run: sudo lm-server config setup"
             return 1
         }
         repo=${repo:-${def_repo}}
@@ -279,13 +281,13 @@ cmd_sync() {
     # From a terminal or Cockpit: as its own service (see run_detached).
     # lm-server-sync/-firstboot.service are one already (LMS_DETACHED=1).
     if [[ -z ${LMS_DETACHED:-} ]]; then
-        run_detached sync "$@"
+        run_detached config pull "$@"
         return
     fi
     local force=0
     [[ ${1:-} == --force ]] && force=1
     lms_load_secrets || {
-        lms_log "not configured yet -- run: sudo lm-server setup"
+        lms_log "not configured yet -- run: sudo lm-server config setup"
         return 0
     }
     exec 9>/run/lm-server-sync.lock
@@ -739,7 +741,8 @@ cmd_start_enabled() {
 
 # ------------------------------------------------------------------ config editing
 
-# config pull: = sync (fetch + apply).
+# config setup: (re)enter the secrets repo + credentials (cmd_setup).
+# config pull [--force]: fetch + apply (cmd_sync).
 # config show: the current lm-server.toml (freshly pulled).
 # config rev:  the commit it comes from (for `save --base`).
 # config source: repo, branch, config file path and GitHub user in use.
@@ -751,12 +754,18 @@ cmd_start_enabled() {
 cmd_config() {
     local sub=${1:-}
     shift || true
-    # config pull: same as `sync` -- fetch what was pushed to GitHub, apply it.
-    if [[ ${sub} == pull ]]; then
+    # config pull: fetch what was pushed to GitHub, apply it.
+    case ${sub} in
+    setup)
+        cmd_setup "$@"
+        return
+        ;;
+    pull)
         cmd_sync "$@"
         return
-    fi
-    lms_load_secrets || lms_die "not configured yet -- run: sudo lm-server setup"
+        ;;
+    esac
+    lms_load_secrets || lms_die "not configured yet -- run: sudo lm-server config setup"
     # config source: where the config comes from (Cockpit fills the setup
     # form with it). The token is never printed.
     if [[ ${sub} == source ]]; then
@@ -784,7 +793,7 @@ cmd_config() {
     show) cat "${conf}" ;;
     rev) git -C "${LMS_REPO_DIR}" rev-parse HEAD ;;
     save) config_save "${conf}" "$@" ;;
-    *) lms_die "usage: lm-server config pull|show|rev|source|status|save [--base <commit>] [--message <text>]" ;;
+    *) lms_die "usage: lm-server config setup|pull|show|rev|source|status|save [--base <commit>] [--message <text>]" ;;
     esac
 }
 
@@ -878,6 +887,20 @@ cmd_logs() {
     journalctl -n 200 "${args[@]}" "$@"
 }
 
+# services [list] | start|stop|restart|logs <service> | resources | routes
+cmd_services_group() {
+    local sub=${1:-list}
+    shift || true
+    case ${sub} in
+    list) cmd_services ;;
+    start | stop | restart) cmd_unit_action "${sub}" "$@" ;;
+    logs) cmd_logs "$@" ;;
+    resources) "${LMS_LIBEXEC}/resources.py" "$@" ;;
+    routes) cmd_routes ;;
+    *) lms_die "usage: lm-server services [list] | start|stop|restart|logs <service> | resources [--json] | routes" ;;
+    esac
+}
+
 cmd_routes() {
     local name units routes desc r
     printf '%-28s %s\n' HOSTNAME SERVICE
@@ -902,7 +925,7 @@ cmd_status() {
         echo "commit: $(cat "${LMS_STATE}/config.rev" 2>/dev/null || echo -)"
         echo "synced: $(cat "${LMS_STATE}/config.synced" 2>/dev/null || echo never)"
     else
-        echo "not configured -- run: sudo lm-server setup"
+        echo "not configured -- run: sudo lm-server config setup"
     fi
     echo
     echo "== Services"
@@ -920,25 +943,44 @@ cmd_history() {
         -u 'lm-server-run-*.service'
 }
 
-# --progress: bootc's progress events (JSON Lines, one object per line) on
-# stdout, next to its normal output -- the Cockpit page draws a bar from them.
-cmd_upgrade() {
-    local progress=()
-    if [[ ${1:-} == --progress ]]; then
-        progress=(--progress-fd 3)
+# system update [--check | --apply] [--progress]: the next system image,
+# staged for the next reboot (--apply: reboot into it now). --progress:
+# bootc's progress events (JSON Lines, one object per line) on stdout, next to
+# its normal output -- the Cockpit page draws a bar from them.
+system_update() {
+    local progress=() mode=""
+    while (($#)); do
+        case $1 in
+        --progress) progress=(--progress-fd 3) ;;
+        --check | --apply) mode=$1 ;;
+        *) lms_die "system update: unknown argument $1" ;;
+        esac
         shift
-    fi
-    case ${1:-} in
+    done
+    case ${mode} in
     --check) bootc upgrade --check ;;
     --apply) bootc upgrade "${progress[@]}" --apply 3>&1 ;;
-    "") bootc upgrade "${progress[@]}" 3>&1 && echo "Staged -- reboot (or run: lm-server upgrade --apply) to switch to it." ;;
-    *) lms_die "upgrade: unknown argument $1" ;;
+    *) bootc upgrade "${progress[@]}" 3>&1 && echo "Staged -- reboot (or run: lm-server system update --apply) to switch to it." ;;
     esac
 }
 
-cmd_update() {
+cmd_system() {
+    local sub=${1:-}
+    shift || true
+    case ${sub} in
+    update) system_update "$@" ;;
+    rollback) bootc rollback ;;
+    *) lms_die "usage: lm-server system update [--check|--apply] [--progress] | rollback" ;;
+    esac
+}
+
+# containers update [--check]: podman auto-update (newer images under the
+# same tags; a service that fails to restart is rolled back), then the
+# containers that follow a file upstream (image_sources.py), then the images
+# that left unused (cleanup.py). podman-auto-update.service does the same.
+containers_update() {
     case ${1:-} in
-    --dry-run | --check)
+    --check)
         podman auto-update --dry-run
         "${LMS_LIBEXEC}/image_sources.py"
         ;;
@@ -946,17 +988,90 @@ cmd_update() {
         # Restarts services: must not die halfway with a Cockpit session
         # (see run_detached).
         if [[ -z ${LMS_DETACHED:-} ]]; then
-            run_detached update
+            run_detached containers update
             return
         fi
-        podman auto-update
-        "${LMS_LIBEXEC}/image_sources.py" --apply
+        local rc=0
+        podman auto-update || rc=$?
+        "${LMS_LIBEXEC}/image_sources.py" --apply || rc=$?
+        "${LMS_LIBEXEC}/cleanup.py" || true
+        return "${rc}"
         ;;
-    *) lms_die "update: unknown argument $1" ;;
+    *) lms_die "containers update: unknown argument $1" ;;
     esac
 }
 
+cmd_containers() {
+    local sub=list
+    if [[ -n ${1:-} && ${1} != -* ]]; then
+        sub=$1
+        shift
+    fi
+    case ${sub} in
+    list) "${LMS_LIBEXEC}/containers.py" "$@" ;;
+    update) containers_update "$@" ;;
+    cleanup) "${LMS_LIBEXEC}/cleanup.py" ;;
+    remove-adhoc) "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
+    *) lms_die "usage: lm-server containers [list] [--json] | update [--check] | cleanup | remove-adhoc" ;;
+    esac
+}
+
+# update [--config] [-c|--containers] [-s|--system] [--check] [--apply]: the
+# config, the containers and the system image, in this order (what Cockpit's
+# "Update all" does) -- all three, or the ones named. Each step runs as its
+# own lm-server, so one failing doesn't stop the others.
+cmd_update() {
+    local cfg=0 ctr=0 sys=0 check=0 apply=0 rc=0 arg i
+    while (($#)); do
+        arg=$1
+        case ${arg} in
+        --config) cfg=1 ;;
+        --containers) ctr=1 ;;
+        --system) sys=1 ;;
+        --check) check=1 ;;
+        --apply) apply=1 ;;
+        -[cs]*)
+            for ((i = 1; i < ${#arg}; i++)); do
+                case ${arg:i:1} in
+                c) ctr=1 ;;
+                s) sys=1 ;;
+                *) lms_die "update: unknown option -${arg:i:1}" ;;
+                esac
+            done
+            ;;
+        *) lms_die "update: unknown argument ${arg} (see: lm-server help)" ;;
+        esac
+        shift
+    done
+    ((cfg || ctr || sys)) || cfg=1 ctr=1 sys=1
+    if ((cfg)); then
+        echo "== Config"
+        if ((check)); then "$0" config status || rc=1; else "$0" config pull || rc=1; fi
+    fi
+    if ((ctr)); then
+        echo "== Containers"
+        if ((check)); then "$0" containers update --check || rc=1; else "$0" containers update || rc=1; fi
+    fi
+    if ((sys)); then
+        echo "== System image"
+        if ((check)); then
+            "$0" system update --check || rc=1
+        elif ((apply)); then
+            "$0" system update --apply || rc=1
+        else
+            "$0" system update || rc=1
+        fi
+    fi
+    return "${rc}"
+}
+
 # ------------------------------------------------------------------ main
+
+ARGV=("$@")
+# The whole command line again, as root.
+root() {
+    [[ ${EUID} -eq 0 ]] || exec sudo -- "$0" "${ARGV[@]}"
+}
 
 cmd=${1:-}
 [[ -n ${cmd} ]] || {
@@ -966,22 +1081,21 @@ cmd=${1:-}
 shift
 case ${cmd} in
 -h | --help | help) usage ;;
-routes) cmd_routes ;;
-services) cmd_services ;;
-status) need_root status "$@" && cmd_status ;;
-history) need_root history "$@" && cmd_history "$@" ;;
-setup) need_root setup "$@" && cmd_setup "$@" ;;
-sync) need_root sync "$@" && cmd_sync "$@" ;;
-config) need_root config "$@" && cmd_config "$@" ;;
-start-enabled) need_root start-enabled && cmd_start_enabled ;;
-start | stop | restart) need_root "${cmd}" "$@" && cmd_unit_action "${cmd}" "$@" ;;
-logs) need_root logs "$@" && cmd_logs "$@" ;;
-upgrade) need_root upgrade "$@" && cmd_upgrade "$@" ;;
-rollback) need_root rollback && bootc rollback ;;
-update) need_root update "$@" && cmd_update "$@" ;;
-containers) need_root containers "$@" && "${LMS_LIBEXEC}/containers.py" "$@" ;;
-resources) need_root resources "$@" && "${LMS_LIBEXEC}/resources.py" "$@" ;;
-prune-adhoc) need_root prune-adhoc && "${LMS_LIBEXEC}/prune-adhoc.sh" --force ;;
+status) root && cmd_status ;;
+history) root && cmd_history "$@" ;;
+update) root && cmd_update "$@" ;;
+system) root && cmd_system "$@" ;;
+containers) root && cmd_containers "$@" ;;
+config) root && cmd_config "$@" ;;
+services)
+    case ${1:-list} in
+    list | routes) ;;
+    *) root ;;
+    esac
+    cmd_services_group "$@"
+    ;;
+# lm-server-services.service (boot)
+start-enabled) root && cmd_start_enabled ;;
 # lm-server-image@.service (boot, before the fstab mount of a storage image)
 image-attach) image_attach "$1" ;;
 image-detach) image_detach "$1" ;;

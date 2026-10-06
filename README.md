@@ -26,7 +26,7 @@ atomically from GHCR, the same way as [immutable-sbc](https://github.com/LukeMec
 ## Services
 
 Each service is one systemd unit. Multi-container services are a **pod**, so
-`lm-server restart immich` (i.e. `immich-pod.service`) restarts all of their
+`lm-server services restart immich` (i.e. `immich-pod.service`) restarts all of their
 containers together. The quadlets live in one folder per service:
 [system_files/usr/share/containers/systemd/](system_files/usr/share/containers/systemd/).
 
@@ -49,7 +49,7 @@ a generic runner for the three Flask sites. It clones the site repo at start
 (private ones with the token), pulls every 3 minutes, and restarts on a new
 commit. Everything else is an upstream image.
 
-**Cloudflare Tunnel routes**: set these in the dashboard. `lm-server routes`
+**Cloudflare Tunnel routes**: set these in the dashboard. `lm-server services routes`
 prints the same table.
 
 | Hostname | Service |
@@ -81,14 +81,17 @@ every boot, which includes every system upgrade. Turn this off with
 
 ## Updates
 
-Cockpit > **Management** > *Update all* runs the three below in this order: config,
-containers, then the system image (downloaded; it switches on the next reboot).
+Cockpit > **Management** > *Update all*, or `lm-server update`, runs the three
+below in this order: config, containers, then the system image (downloaded; it
+switches on the next reboot). `lm-server update --config|-c|-s` picks some
+(`-c` containers, `-s` system, `-cs` both), `--check` only shows what's new,
+`--apply` reboots into a new system image.
 
 | What | How | When |
 |---|---|---|
-| System image | `lm-server upgrade [--check\|--apply]`, `lm-server rollback`, Cockpit | `[updates] system`, default `"manual"` |
-| Containers | `lm-server update [--dry-run]` (`podman auto-update`, rolls back a service that fails to restart; then the containers that follow a file upstream), `lm-server containers` (running vs. available versions), Cockpit | `[updates] containers`, default `"daily"` |
-| Configs (lm-server.toml) | `lm-server config pull` (= `sync`), `lm-server config status`, Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
+| System image | `lm-server system update [--check\|--apply]`, `lm-server system rollback`, Cockpit | `[updates] system`, default `"manual"` |
+| Containers | `lm-server containers update [--check]` (`podman auto-update`, rolls back a service that fails to restart; then the containers that follow a file upstream; then `containers cleanup`), `lm-server containers` (running vs. available versions), Cockpit | `[updates] containers`, default `"daily"` |
+| Configs (lm-server.toml) | `lm-server config pull`, `lm-server config status`, Cockpit *Sync configs* | `[updates] config`, default `"hourly"`; `"manual"` = at boot + on demand |
 
 **Versions**: `versions = { <container> = "<tag>" }` in a service's section
 sets the image tag of its containers, keyed by the container name without
@@ -105,6 +108,12 @@ version (`1.6.0`) stays put. lm-server writes it as a drop-in,
 `image_sources.py` reads that file and switches the database to it (a drop-in,
 `image-source.conf`; never to another Postgres major). Cockpit shows it as
 *Up to date* with a *Source* link to the file. A version in `versions` wins.
+
+**Unused images** are removed after every container update: the ones an update
+replaced, tags no quadlet names any more, dangling layers. An image stays while
+a container uses it or a quadlet (or a drop-in, e.g. from `versions`) names it,
+so a stopped service doesn't pull it again. By hand: `lm-server containers
+cleanup`, Cockpit *Clean up images*.
 
 **Editing the config from Cockpit**: *Configuration (lm-server.toml)* loads
 the file from the secrets repo. *Save, push & apply* checks it, commits and
@@ -216,10 +225,10 @@ empty, like a fresh install. Restore its data first (see below).
 when restoring a backup (without `storage`; with it, let the sync copy):
 
 ```sh
-lm-server stop immich
+lm-server services stop immich
 rsync -aHA --info=progress2 /var/lib/lm-server/volumes/immich/ /var/mnt/hdd-mirror/immich/
 # edit [immich] disk = "/var/mnt/hdd-mirror/immich" (Cockpit editor or the repo)
-lm-server sync      # target isn't empty -> no copy, just switch and start
+lm-server config pull   # target isn't empty -> no copy, just switch and start
 ```
 
 `/var/lib/lm-server/volumes/<service>/` always shows the service's current
@@ -230,7 +239,7 @@ in a service's section cap all of its containers together, like the
 cores/RAM of a Proxmox guest. They're applied live via the service's systemd
 slice `lm-server-<service>.slice` (cgroups, the kernel's own limits; podman
 isn't involved). Leave them out for no limit. Cockpit > Management > Services
-(or `lm-server resources`) shows each service's CPU, RAM and disk against its
+(or `lm-server services resources`) shows each service's CPU, RAM and disk against its
 limits. Swap is **zram** (half of RAM, zstd), configured in
 `/usr/lib/systemd/zram-generator.conf`.
 
@@ -313,18 +322,23 @@ Only the host's architecture: AlmaLinux ships no QEMU for other architectures
 
 Locked out (the config never applied)? In the GRUB menu, press `e` and add
 `systemd.setenv=SYSTEMD_SULOGIN_FORCE=1 systemd.unit=rescue.target` to the
-`linux` line. That boots to a root shell. Then run `lm-server setup`, then
+`linux` line. That boots to a root shell. Then run `lm-server config setup`, then
 `systemctl default`.
 
 ## CLI
 
 ```
-lm-server status | history [N] | routes | services
-lm-server setup | sync [--force] (= config pull) | config show | config save < lm-server.toml
-lm-server upgrade [--check|--apply] | rollback | update [--dry-run]
-lm-server start|stop|restart|logs <service>
-lm-server prune-adhoc
+lm-server status | history [N]
+lm-server update [--config] [-c|--containers] [-s|--system] [--check] [--apply]
+
+lm-server system update [--check|--apply] | rollback
+lm-server containers [--json] | update [--check] | cleanup | remove-adhoc
+lm-server config setup | pull [--force] | status | show | save < lm-server.toml
+lm-server services [list] | start|stop|restart|logs <service> | resources | routes
 ```
+
+`lm-server help` lists them all. Each group acts on one thing; `update` alone
+runs all three updates in order (Cockpit's *Update all*).
 
 ## Repository
 
@@ -427,5 +441,5 @@ Rules for the quadlets:
 - A custom renderer in `render.py` (`CUSTOM`) is only needed for generated
   config files or several env files. disks, immich and remote have one.
 
-Then push. CI builds the image, and `lm-server upgrade` + reboot brings the
+Then push. CI builds the image, and `lm-server system update` + reboot brings the
 service to the server.

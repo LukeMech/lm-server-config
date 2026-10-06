@@ -17,7 +17,7 @@ keyboard us
 
 # Re-point the installed system at the registry with signature verification
 # (policy.json + cosign key in the image), so `bootc upgrade` /
-# `lm-server upgrade` pull signed images from GHCR.
+# `lm-server system update` pull signed images from GHCR.
 %post
 bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ghcr.io/lukemech/lm-server:latest
 %end

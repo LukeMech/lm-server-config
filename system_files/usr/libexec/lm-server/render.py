@@ -13,7 +13,7 @@ Usage:
                                     <out>/.errors/<service>), 2 unreadable config
     render.py check <toml>          same checks and exit codes, writes nothing
 
-The GitHub credentials from `lm-server setup` come in as LMS_GITHUB_TOKEN /
+The GitHub credentials from `lm-server config setup` come in as LMS_GITHUB_TOKEN /
 LMS_GITHUB_USER ({{github_token}} / {{github_user}} in `env` defaults).
 
 A service is a directory of quadlets in /usr/share/containers/systemd/<name>/.

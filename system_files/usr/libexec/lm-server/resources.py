@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""lm-server resources [--json] [--no-disk]: per service, what it may use and
+"""lm-server services resources [--json] [--no-disk]: per service, what it may use and
 what it uses now.
 
 CPU and memory are those of lm-server-<svc>.slice (all of the service's

@@ -5,4 +5,4 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/lm-server upgrade --apply
+ExecStart=/usr/bin/lm-server system update --apply

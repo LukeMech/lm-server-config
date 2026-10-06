@@ -152,7 +152,7 @@ def main(argv):
             else (c["error"] or "not auto-updated"))
         print(f"{c['service']:<10} {c['container']:<26} {ver(c['current']):<34} {avail}")
     print(f"\n{sum(c['update'] == 'pending' for c in items)} of {len(items)} containers have an update"
-          " (lm-server update pulls them).")
+          " (lm-server containers update pulls them).")
     return 0
 
 
