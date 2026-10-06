@@ -6,10 +6,13 @@ Containers are the ones systemd runs from the image's quadlets (label
 PODMAN_SYSTEMD_UNIT). For each: its image, the version it runs now
 (org.opencontainers.image.version, build date, digest) and -- if the registry
 has a newer one -- the same for that image. "Newer" is podman auto-update's
-own verdict (--dry-run); skopeo only fetches the details of those images.
+own test, made for every image at once instead of one after another: the
+digest of the manifest the registry serves for the tag (skopeo --raw: the
+manifest list's, for a multi-arch image) is not one this image was pulled as.
 A container with a source (image_sources.py) is compared with the image its
 source names instead ("source": the file's URL).
 """
+import hashlib
 import json
 import subprocess
 import sys
@@ -65,19 +68,22 @@ def containers():
     return result
 
 
-def dry_run():
-    """{container id or name: report} from podman auto-update --dry-run."""
-    out = run("podman", "auto-update", "--dry-run", "--format", "json")
-    reports = {}
-    try:
-        data = json.loads(out.stdout or "[]")
-    except json.JSONDecodeError:
-        data = []
-    for r in data or []:
-        for key in ("ContainerID", "ContainerName", "Container"):
-            if r.get(key):
-                reports[r[key]] = r
-    return reports, (out.stderr.strip() if out.returncode else "")
+def remote_digest(image):
+    """Digest of the manifest the registry serves for image's tag -- what
+    podman auto-update compares with the local image's."""
+    out = subprocess.run(["skopeo", "inspect", "--raw", "docker://" + image], capture_output=True, timeout=120)
+    if out.returncode:
+        err = out.stderr.decode(errors="replace").strip()
+        raise RuntimeError(err.splitlines()[-1] if err else "skopeo failed")
+    return "sha256:" + hashlib.sha256(out.stdout).hexdigest()
+
+
+def local_digests(inspect):
+    """Every digest the local image is known by (its own, and the repo
+    digests of what it was pulled as, e.g. a manifest list's)."""
+    found = {inspect.get("Digest", "")}
+    found.update(d.rsplit("@", 1)[-1] for d in inspect.get("RepoDigests") or [])
+    return found - {""}
 
 
 def remote(image):
@@ -97,23 +103,29 @@ def main(argv):
         print(f"lm-server: {ex}", file=sys.stderr)
         return 1
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        check = pool.submit(dry_run) if check_registry else None
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        # Everything that talks to a registry (or GitHub) at once.
+        tags = sorted({c["image"] for c in items if c["policy"] == "registry"}) if check_registry else []
+        digests = {i: pool.submit(remote_digest, i) for i in tags}
+        sources = pool.submit(image_sources.check, items, check_registry)
         ids = sorted({c["image_id"] for c in items if c["image_id"]})
         local = dict(zip(ids, pool.map(lambda i: run("podman", "image", "inspect", i, timeout=60), ids)))
-        reports, error = check.result() if check else ({}, "")
+        sourced = sources.result()
 
         for c in items:
             out = local.get(c["image_id"])
-            if out is not None and out.returncode == 0:
-                c["current"] = image_info((json.loads(out.stdout) or [{}])[0])
-            r = reports.get(c["id"]) or reports.get(c["id"][:12]) or reports.get(c["container"])
-            if r:
-                c["update"] = str(r.get("Updated", "")).lower()
-            elif c["policy"] and error:
-                c["error"] = error.splitlines()[-1]
+            data = (json.loads(out.stdout) or [{}])[0] if out is not None and out.returncode == 0 else {}
+            if data:
+                c["current"] = image_info(data)
+            fut = digests.get(c["image"])
+            if fut is None:
+                continue
+            try:
+                c["update"] = "false" if fut.result() in local_digests(data) else "pending"
+            except (RuntimeError, OSError, subprocess.TimeoutExpired) as ex:
+                c["error"] = str(ex)
         # A source naming another image beats the registry's verdict on this one.
-        for c in image_sources.check(items, fetch=check_registry):
+        for c in sourced:
             if c["wanted"] and c["wanted"] != c["image"]:
                 c["update"] = "pending"
 

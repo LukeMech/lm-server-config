@@ -15,7 +15,8 @@ bash /ctx/remove-packages.sh --check \
     systemd-escape flock base64 sha256sum od useradd usermod getent timedatectl \
     hostnamectl systemd-analyze firewall-cmd sshd cockpit-bridge mdadm mkfs.xfs \
     lvcreate smartctl mkfs.ext4 resize2fs losetup systemd-run ip blkid udevadm \
-    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi nvidia-ctk
+    pminfo tuned-adm semodule semanage setsebool restorecon nvidia-smi nvidia-ctk \
+    fastfetch
 
 # The kernel's version from its package, not from /usr/lib/modules: that can
 # hold more directories than the kernel's own (a kABI-tracking kmod installs

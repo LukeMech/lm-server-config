@@ -628,7 +628,7 @@ function renderResources() {
 }
 
 // While the page is shown (Cockpit hides it in the background otherwise).
-setInterval(() => { if (!cockpit.hidden) loadResources(false); }, 10000);
+setInterval(() => { if (!cockpit.hidden) loadResources(false); }, 3000);
 
 // ---- Automatic runs: the journal of the update/sync units, as a table
 const HISTORY_LINE = /^(\d{4}-\d\d-\d\dT[\d:]+(?:[+-][\d:]+|Z)?) \S+ ([^\s[:]+)(?:\[\d+\])?: (.*)$/;
@@ -781,9 +781,95 @@ document.body.addEventListener("click", ev => {
     if (action) action();
 });
 
+// ---- Server: fastfetch, as a terminal shows it
+// fastfetch draws its logo first, then moves the cursor back up and to the
+// right (ESC[nA, ESC[nC) for the lines beside it -- so its output is played
+// onto a grid of cells (character + color), then each row becomes HTML.
+const ANSI = ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+    "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#ffffff"];
+
+function xterm256(n) {
+    if (n < 16) return ANSI[n];
+    if (n >= 232) { const v = 8 + (n - 232) * 10; return `rgb(${v},${v},${v})`; }
+    n -= 16;
+    const c = v => (v ? 55 + v * 40 : 0);
+    return `rgb(${c(Math.floor(n / 36))},${c(Math.floor(n / 6) % 6)},${c(n % 6)})`;
+}
+
+function terminalHtml(text) {
+    const rows = [];
+    let r = 0, col = 0, fg = null, bold = false;
+    const put = ch => {
+        while (rows.length <= r) rows.push([]);
+        const row = rows[r];
+        while (row.length < col) row.push({ ch: " " });
+        row[col++] = { ch, fg, bold };
+    };
+    const sgr = params => {
+        const p = params.length ? params.split(";").map(Number) : [0];
+        for (let i = 0; i < p.length; i++) {
+            const v = p[i];
+            if (v === 0) { fg = null; bold = false; }
+            else if (v === 1) bold = true;
+            else if (v === 22) bold = false;
+            else if (v === 39) fg = null;
+            else if (v >= 30 && v <= 37) fg = ANSI[v - 30];
+            else if (v >= 90 && v <= 97) fg = ANSI[v - 90 + 8];
+            else if (v === 38 && p[i + 1] === 5) { fg = xterm256(p[i + 2]); i += 2; }
+            else if (v === 38 && p[i + 1] === 2) { fg = `rgb(${p[i + 2]},${p[i + 3]},${p[i + 4]})`; i += 4; }
+        }
+    };
+    const re = /\x1b\[([0-9;?]*)([A-Za-z])|\x1b\][^\x07]*\x07|([\s\S])/g;
+    let m;
+    while ((m = re.exec(text))) {
+        if (m[3] !== undefined) {
+            if (m[3] === "\n") { r++; col = 0; }
+            else if (m[3] === "\r") col = 0;
+            else if (m[3] >= " ") put(m[3]);
+            continue;
+        }
+        if (m[2] === undefined) continue; // OSC (e.g. a window title)
+        const n = parseInt(m[1], 10) || 1;
+        switch (m[2]) {
+        case "m": sgr(m[1]); break;
+        case "A": r = Math.max(0, r - n); break;
+        case "B": r += n; break;
+        case "C": col += n; break;
+        case "D": col = Math.max(0, col - n); break;
+        case "G": col = n - 1; break;
+        }
+    }
+    return rows.map(row => {
+        let html = "", open = null;
+        for (const cell of row) {
+            const key = cell.fg || cell.bold ? `${cell.fg}|${cell.bold}` : null;
+            if (key !== open) {
+                if (open) html += "</span>";
+                if (key) html += `<span${cell.bold ? ' class="b"' : ""}${cell.fg ? ` style="color:${cell.fg}"` : ""}>`;
+                open = key;
+            }
+            html += esc(cell.ch);
+        }
+        return html + (open ? "</span>" : "");
+    }).join("\n").replace(/\s+$/, "");
+}
+
+// The modules that mean something here (no shell, terminal, display or
+// theme -- Cockpit's bridge would be all of those).
+const FASTFETCH = ["fastfetch", "--pipe", "false", "--structure",
+    "Title:Separator:OS:Host:Kernel:Uptime:Packages:CPU:GPU:Memory:Swap:Disk:LocalIp:Break:Colors"];
+
+function loadFastfetch() {
+    return cockpit.spawn(FASTFETCH, { err: "message" })
+        .then(out => { $("fastfetch").innerHTML = terminalHtml(out); })
+        .catch(ex => { $("fastfetch").textContent = problem(ex); });
+}
+setInterval(() => { if (!cockpit.hidden) loadFastfetch(); }, 30000);
+
 // ---- Start: check at load (also in the background, preloaded at login),
 // again every hour, and when admin access gets switched on in the top bar.
 function start() {
+    loadFastfetch();
     exclusive(checkAll);
     setupLoad();
     loadResources(true);

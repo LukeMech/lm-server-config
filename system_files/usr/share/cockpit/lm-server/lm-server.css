@@ -141,6 +141,18 @@ pre.log {
     min-height: 2em;
 }
 
+/* fastfetch: its logo and lines side by side, as in a terminal -- never
+   wrapped (scrolls sideways on a narrow screen instead). */
+pre.fastfetch {
+    margin: 0;
+    white-space: pre;
+    word-break: normal;
+    max-height: none;
+    font-size: 13px;
+    line-height: 1.3;
+}
+pre.fastfetch .b { font-weight: 700; }
+
 pre.log.failed {
     outline: 2px solid #c9190b;
 }
