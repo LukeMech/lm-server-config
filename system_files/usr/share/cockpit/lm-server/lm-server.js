@@ -798,25 +798,33 @@ function xterm256(n) {
 
 function terminalHtml(text) {
     const rows = [];
-    let r = 0, col = 0, fg = null, bold = false;
+    let r = 0, col = 0, fg = null, bg = null, bold = false;
     const put = ch => {
         while (rows.length <= r) rows.push([]);
         const row = rows[r];
         while (row.length < col) row.push({ ch: " " });
-        row[col++] = { ch, fg, bold };
+        row[col++] = { ch, fg, bg, bold };
     };
+    // A color: 30-37/90-97 (fg) or 40-47/100-107 (bg) from the 16, 38/48;5;n
+    // from the 256, 38/48;2;r;g;b as is.
     const sgr = params => {
         const p = params.length ? params.split(";").map(Number) : [0];
         for (let i = 0; i < p.length; i++) {
             const v = p[i];
-            if (v === 0) { fg = null; bold = false; }
+            let color;
+            if (p[i + 1] === 5 && (v === 38 || v === 48)) { color = xterm256(p[i + 2]); i += 2; }
+            else if (p[i + 1] === 2 && (v === 38 || v === 48)) { color = `rgb(${p[i + 2]},${p[i + 3]},${p[i + 4]})`; i += 4; }
+            if (v === 0) { fg = bg = null; bold = false; }
             else if (v === 1) bold = true;
             else if (v === 22) bold = false;
             else if (v === 39) fg = null;
+            else if (v === 49) bg = null;
+            else if (v === 38) fg = color;
+            else if (v === 48) bg = color;
             else if (v >= 30 && v <= 37) fg = ANSI[v - 30];
             else if (v >= 90 && v <= 97) fg = ANSI[v - 90 + 8];
-            else if (v === 38 && p[i + 1] === 5) { fg = xterm256(p[i + 2]); i += 2; }
-            else if (v === 38 && p[i + 1] === 2) { fg = `rgb(${p[i + 2]},${p[i + 3]},${p[i + 4]})`; i += 4; }
+            else if (v >= 40 && v <= 47) bg = ANSI[v - 40];
+            else if (v >= 100 && v <= 107) bg = ANSI[v - 100 + 8];
         }
     };
     const re = /\x1b\[([0-9;?]*)([A-Za-z])|\x1b\][^\x07]*\x07|([\s\S])/g;
@@ -839,13 +847,18 @@ function terminalHtml(text) {
         case "G": col = n - 1; break;
         }
     }
+    // Colors as data-fg/data-bg, set by paintTerminal(): Cockpit's CSP drops
+    // style="..." attributes, but not styles set from script.
     return rows.map(row => {
         let html = "", open = null;
         for (const cell of row) {
-            const key = cell.fg || cell.bold ? `${cell.fg}|${cell.bold}` : null;
+            const key = cell.fg || cell.bg || cell.bold ? `${cell.fg}|${cell.bg}|${cell.bold}` : null;
             if (key !== open) {
                 if (open) html += "</span>";
-                if (key) html += `<span${cell.bold ? ' class="b"' : ""}${cell.fg ? ` style="color:${cell.fg}"` : ""}>`;
+                if (key) {
+                    html += `<span${cell.bold ? ' class="b"' : ""}${cell.fg ? ` data-fg="${cell.fg}"` : ""}` +
+                        `${cell.bg ? ` data-bg="${cell.bg}"` : ""}>`;
+                }
                 open = key;
             }
             html += esc(cell.ch);
@@ -859,9 +872,19 @@ function terminalHtml(text) {
 const FASTFETCH = ["fastfetch", "--pipe", "false", "--structure",
     "Title:Separator:OS:Host:Kernel:Uptime:Packages:CPU:GPU:Memory:Swap:Disk:LocalIp:Break:Colors"];
 
+function paintTerminal(el) {
+    el.querySelectorAll("[data-fg]").forEach(s => { s.style.color = s.dataset.fg; });
+    el.querySelectorAll("[data-bg]").forEach(s => { s.style.backgroundColor = s.dataset.bg; });
+}
+
+// TERM: Cockpit's bridge has none, and without it fastfetch may leave its
+// colors out even with --pipe false.
 function loadFastfetch() {
-    return cockpit.spawn(FASTFETCH, { err: "message" })
-        .then(out => { $("fastfetch").innerHTML = terminalHtml(out); })
+    return cockpit.spawn(FASTFETCH, { err: "message", environ: ["TERM=xterm-256color", "COLORTERM=truecolor"] })
+        .then(out => {
+            $("fastfetch").innerHTML = terminalHtml(out);
+            paintTerminal($("fastfetch"));
+        })
         .catch(ex => { $("fastfetch").textContent = problem(ex); });
 }
 setInterval(() => { if (!cockpit.hidden) loadFastfetch(); }, 30000);
