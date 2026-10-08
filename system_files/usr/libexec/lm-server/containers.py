@@ -7,13 +7,16 @@ PODMAN_SYSTEMD_UNIT). For each: its image, the version it runs now
 (org.opencontainers.image.version, build date, digest) and -- if the registry
 has a newer one -- the same for that image. "Newer" is podman auto-update's
 own test, made for every image at once instead of one after another: the
-digest of the manifest the registry serves for the tag (skopeo --raw: the
-manifest list's, for a multi-arch image) is not one this image was pulled as.
+image the registry serves for the tag on this machine's platform (skopeo
+--raw; of a multi-arch manifest list, the entry for this architecture) is
+not the one running. The list itself is re-pushed now and then with the
+image for this platform unchanged (Docker's official images): that's no update.
 A container with a source (image_sources.py) is compared with the image its
 source names instead ("source": the file's URL).
 """
 import hashlib
 import json
+import platform
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -68,14 +71,27 @@ def containers():
     return result
 
 
-def remote_digest(image):
-    """Digest of the manifest the registry serves for image's tag -- what
-    podman auto-update compares with the local image's."""
+ARCH = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine(), platform.machine())
+
+
+def remote_digests(image):
+    """Digests the registry serves for image's tag: its manifest's and, for a
+    manifest list, the entry for this architecture (the image podman would
+    pull) -- any one of them on the local image means it is up to date."""
     out = subprocess.run(["skopeo", "inspect", "--raw", "docker://" + image], capture_output=True, timeout=120)
     if out.returncode:
         err = out.stderr.decode(errors="replace").strip()
         raise RuntimeError(err.splitlines()[-1] if err else "skopeo failed")
-    return "sha256:" + hashlib.sha256(out.stdout).hexdigest()
+    found = {"sha256:" + hashlib.sha256(out.stdout).hexdigest()}
+    try:
+        manifests = json.loads(out.stdout).get("manifests") or []
+    except (ValueError, AttributeError):
+        manifests = []
+    for m in manifests:
+        plat = m.get("platform") or {}
+        if plat.get("os") == "linux" and plat.get("architecture") == ARCH and m.get("digest"):
+            found.add(m["digest"])
+    return found
 
 
 def local_digests(inspect):
@@ -106,7 +122,7 @@ def main(argv):
     with ThreadPoolExecutor(max_workers=12) as pool:
         # Everything that talks to a registry (or GitHub) at once.
         tags = sorted({c["image"] for c in items if c["policy"] == "registry"}) if check_registry else []
-        digests = {i: pool.submit(remote_digest, i) for i in tags}
+        digests = {i: pool.submit(remote_digests, i) for i in tags}
         sources = pool.submit(image_sources.check, items, check_registry)
         ids = sorted({c["image_id"] for c in items if c["image_id"]})
         local = dict(zip(ids, pool.map(lambda i: run("podman", "image", "inspect", i, timeout=60), ids)))
@@ -121,7 +137,7 @@ def main(argv):
             if fut is None:
                 continue
             try:
-                c["update"] = "false" if fut.result() in local_digests(data) else "pending"
+                c["update"] = "false" if fut.result() & local_digests(data) else "pending"
             except (RuntimeError, OSError, subprocess.TimeoutExpired) as ex:
                 c["error"] = str(ex)
         # A source naming another image beats the registry's verdict on this one.
