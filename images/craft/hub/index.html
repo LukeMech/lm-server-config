@@ -26,15 +26,14 @@
       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
     main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 72px; }
-    header { margin-bottom: 40px; }
+    header { margin-bottom: 16px; }
     .eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
     h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; margin: 8px 0 12px; letter-spacing: -.02em; }
     header p { color: var(--muted); margin: 0; max-width: 60ch; }
-    h2 {
-      font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .08em;
-      text-transform: uppercase; margin: 40px 0 16px;
-    }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+    section { margin-top: 40px; }
+    h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; font-size: 20px; letter-spacing: -.01em; }
+    h2 small { color: var(--muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
     a.card {
       display: flex; flex-direction: column; gap: 14px; padding: 20px;
       background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
@@ -44,21 +43,22 @@
     a.card:hover { transform: translateY(-2px); border-color: var(--accent); }
     a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     a.card.off { opacity: .55; }
-    .top { display: flex; align-items: center; gap: 12px; }
+    .top { display: flex; align-items: center; gap: 14px; }
     .icon {
-      width: 44px; height: 44px; border-radius: 12px; flex: none;
-      display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      width: 52px; height: 52px; border-radius: 12px; flex: none; overflow: hidden;
+      display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 18px;
+      background: var(--accent);
     }
-    .name { font-weight: 650; font-size: 17px; }
-    .num { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .icon img { width: 100%; height: 100%; display: block; }
+    .name { font-weight: 650; font-size: 17px; line-height: 1.25; }
+    .alt { color: var(--muted); font-size: 13px; }
     .desc { color: var(--muted); margin: 0; flex: 1; }
     .foot { display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .chip { background: var(--chip); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
     .ok .dot { background: var(--ok); }
     .open { margin-left: auto; font-weight: 600; color: var(--accent); }
-    footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+    footer { margin-top: 56px; color: var(--muted); font-size: 13px; }
     footer a { color: inherit; }
     @media (max-width: 480px) { main { padding: 32px 16px 48px; } }
   </style>
@@ -68,49 +68,53 @@
   <header>
     <div class="eyebrow">edit.lukemech.org</div>
     <h1>Editors &amp; tools</h1>
-    <p>Open-source creative apps. The Crafting Apps run entirely in the browser: your files stay on your device.</p>
+    <p>Open-source alternatives to the usual desktop suites. The Crafting Apps run entirely in the browser: your files stay on your device.</p>
   </header>
-
-  <h2>Crafting Apps</h2>
-  <div class="grid" id="crafts"></div>
-
-  <h2>Tools</h2>
-  <div class="grid" id="tools"></div>
-
+  <div id="groups"></div>
   <footer>
     Crafting Apps by <a href="https://github.com/storytold" rel="noopener">Storytold</a> &middot;
-    ConvertX by <a href="https://github.com/C4illin/ConvertX" rel="noopener">C4illin</a>
+    ConvertX by <a href="https://github.com/C4illin/ConvertX" rel="noopener">C4illin</a> &middot;
+    product names are trademarks of their owners, named only for comparison.
   </footer>
 </main>
 
 <script>
-  // path: where the app lives under this site. craft: a Storytold app (its
-  // container serves craft.json with the version). The others are only
-  // checked for an answer.
-  const APPS = [
-    { path: "pdf",    name: "PdfCraft",    desc: "PDF workbench: read, organize, combine, split and secure documents.", c: ["#e5484d", "#f76b15"], craft: true },
-    { path: "photo",  name: "PhotoCraft",  desc: "Image editor with layers, masks, adjustments and brushes.",           c: ["#3e63dd", "#0090ff"], craft: true },
-    { path: "vector", name: "VectorCraft", desc: "Vector illustration: paths, shapes, type and artboards.",              c: ["#f5a524", "#e5484d"], craft: true },
-    { path: "film",   name: "FilmCraft",   desc: "Non-linear video editing on a timeline.",                              c: ["#8e4ec6", "#3e63dd"], craft: true },
-    { path: "light",  name: "LightCraft",  desc: "Photo library and raw developer.",                                     c: ["#12a594", "#3e63dd"], craft: true },
-    { path: "effect", name: "EffectCraft", desc: "Motion graphics and visual effects.",                                  c: ["#d6409f", "#8e4ec6"], craft: true },
-    { path: "design", name: "DesignCraft", desc: "Page layout and publishing.",                                          c: ["#e54666", "#d6409f"], craft: true },
-  ];
-  const TOOLS = [
-    { path: "converter", name: "Converter", desc: "Convert files between formats: images, video, audio, documents and more (ConvertX).", c: ["#30a46c", "#12a594"] },
+  // path: where the app lives under this site. craft: a Storytold app -- its
+  // container serves craft.json (version) and icon.png (from the app's repo).
+  // The others are only checked for an answer.
+  const GROUPS = [
+    { title: "Adobe", note: "Creative Cloud alternatives", apps: [
+      { path: "photo",  name: "PhotoCraft",  alt: "Adobe Photoshop",   desc: "Image editing with layers, masks, adjustments and brushes.", c: "#2f6fe4", craft: true },
+      { path: "vector", name: "VectorCraft", alt: "Adobe Illustrator", desc: "Vector illustration: paths, shapes, type and artboards.",    c: "#e08a1e", craft: true },
+      { path: "light",  name: "LightCraft",  alt: "Adobe Lightroom",   desc: "Photo library and raw developer.",                           c: "#12a594", craft: true },
+      { path: "design", name: "DesignCraft", alt: "Adobe InDesign",    desc: "Page layout and publishing.",                                c: "#e54666", craft: true },
+      { path: "film",   name: "FilmCraft",   alt: "Adobe Premiere Pro", desc: "Non-linear video editing on a timeline.",                   c: "#8e4ec6", craft: true },
+      { path: "effect", name: "EffectCraft", alt: "Adobe After Effects", desc: "Motion graphics and visual effects.",                       c: "#6e56cf", craft: true },
+      { path: "pdf",    name: "PdfCraft",    alt: "Adobe Acrobat",     desc: "PDF workbench: read, organize, combine, split and secure.",  c: "#e5484d", craft: true },
+    ]},
+    { title: "Office", note: "Microsoft 365 alternatives", apps: [
+      { path: "word", name: "WordCraft", alt: "Microsoft Word",       desc: "Word processor for documents and reports.", c: "#2b5797", craft: true },
+      { path: "grid", name: "GridCraft", alt: "Microsoft Excel",      desc: "Spreadsheets: formulas, tables and charts.", c: "#1e8e4f", craft: true },
+      { path: "deck", name: "DeckCraft", alt: "Microsoft PowerPoint", desc: "Presentations and slide shows.",             c: "#d35230", craft: true },
+    ]},
+    { title: "Autodesk & Avid", note: "engineering and audio", apps: [
+      { path: "cad",   name: "CADCraft",   alt: "Autodesk AutoCAD", desc: "Computer-aided design and drafting.",      c: "#c7303a", craft: true },
+      { path: "sound", name: "SoundCraft", alt: "Avid Pro Tools",   desc: "Multitrack audio recording and mixing.", c: "#5b5bd6", craft: true },
+    ]},
+    { title: "Tools", note: "on this server", apps: [
+      { path: "converter", name: "Converter", alt: "ConvertX", desc: "Convert files between formats: images, video, audio, documents and more. Files are uploaded to this server; sign-in required.", c: "#30a46c" },
+    ]},
   ];
 
-  function card(app, i) {
+  function card(app) {
     const a = document.createElement("a");
     a.className = "card";
     a.href = `./${app.path}/`;
-    a.style.setProperty("--accent", app.c[0]);
-    a.style.setProperty("--accent2", app.c[1]);
+    a.style.setProperty("--accent", app.c);
     a.innerHTML = `
       <div class="top">
         <div class="icon" aria-hidden="true"></div>
-        <div class="name"></div>
-        <div class="num">${String(i + 1).padStart(2, "0")}</div>
+        <div><div class="name"></div><div class="alt"></div></div>
       </div>
       <p class="desc"></p>
       <div class="foot">
@@ -118,8 +122,16 @@
         <span class="chip status">checking&hellip;</span>
         <span class="open">Open &rarr;</span>
       </div>`;
-    a.querySelector(".icon").textContent = app.name.slice(0, app.name.endsWith("Craft") ? -5 : undefined).slice(0, 2);
+    const icon = a.querySelector(".icon");
+    icon.textContent = app.name.replace(/Craft$/, "").slice(0, 2);
+    if (app.craft) {
+      const img = new Image();
+      img.alt = "";
+      img.onload = () => icon.replaceChildren(img);
+      img.src = `./${app.path}/icon.png`;
+    }
     a.querySelector(".name").textContent = app.name;
+    a.querySelector(".alt").textContent = app.craft ? `Alternative to ${app.alt}` : app.alt;
     a.querySelector(".desc").textContent = app.desc;
     probe(app, a);
     return a;
@@ -139,8 +151,20 @@
     }
   }
 
-  document.getElementById("crafts").append(...APPS.map(card));
-  document.getElementById("tools").append(...TOOLS.map(card));
+  const root = document.getElementById("groups");
+  for (const g of GROUPS) {
+    const s = document.createElement("section");
+    const h = document.createElement("h2");
+    h.textContent = g.title;
+    const small = document.createElement("small");
+    small.textContent = g.note;
+    h.append(small);
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.append(...g.apps.map(card));
+    s.append(h, grid);
+    root.append(s);
+  }
 </script>
 </body>
 </html>

@@ -9,7 +9,8 @@ App (CRAFT_REPO set):
     CRAFT_UPDATE_INTERVAL  seconds between release checks, default 21600
 
     The release's <name>-web-<version>.zip is checked against its
-    SHA256SUMS.txt and unpacked to /data/<tag>/; /data/current points at the
+    SHA256SUMS.txt and unpacked to /data/<tag>/, with the app's icon from its
+    repo at that tag as icon.png (for the hub); /data/current points at the
     one served. A new release is unpacked next to it and the link swapped,
     without a restart. The previous release is kept, older ones removed.
     Without GitHub at start, the release already in /data is served.
@@ -33,12 +34,21 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
 DATA = "/data"
 CONF = "/tmp/nginx.conf"
 HUB = "/usr/share/lm-server-craft/hub"
+# The app's icon in its repo (assets/app-icon/), first found; {n} = repo name.
+# The repos differ: not every one has the hicolor set.
+ICONS = (
+    "assets/app-icon/hicolor/256x256/apps/ai.storyteller.{n}.png",
+    "assets/app-icon/{n}-256.png",
+    "assets/app-icon/{n}-macos-512.png",
+    "assets/app-icon/{n}-1024.png",
+)
 # Files nginx sends precompressed (gzip_static); the .wasm is most of an app.
 COMPRESS = re.compile(r"\.(wasm|js|mjs|html|css|json|svg|webmanifest)$")
 
@@ -149,6 +159,28 @@ def release(repo, version):
     return rel["tag_name"], (web[0], assets[web[0]]), assets["SHA256SUMS.txt"]
 
 
+def icon(repo, tag, site):
+    """The app's icon as <site>/icon.png -- nice to have, never fatal."""
+    name = repo.rsplit("/", 1)[-1]
+    for path in ICONS:
+        try:
+            data = get(f"https://raw.githubusercontent.com/{repo}/{tag}/{path.format(n=name)}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                continue
+            log(f"{repo}: no icon ({e})")
+            return
+        except Exception as e:
+            log(f"{repo}: no icon ({e})")
+            return
+        if data[:4] == bytes((0x89, 0x50, 0x4E, 0x47)):  # PNG signature
+            with open(os.path.join(site, ".icon.png"), "wb") as fh:
+                fh.write(data)
+            os.replace(os.path.join(site, ".icon.png"), os.path.join(site, "icon.png"))
+            return
+    log(f"{repo}: no icon in assets/app-icon/")
+
+
 def install(repo, tag, web, sums_url):
     """Download, verify and unpack a release to DATA/<tag>."""
     name, url = web
@@ -179,6 +211,7 @@ def install(repo, tag, web, sums_url):
                     src = os.path.join(dirpath, f)
                     with open(src, "rb") as fi, gzip.open(src + ".gz", "wb", compresslevel=9) as fo:
                         shutil.copyfileobj(fi, fo)
+        icon(repo, tag, root)
         with open(os.path.join(root, "craft.json"), "w") as fh:
             json.dump({"repo": repo, "version": tag.lstrip("v"), "tag": tag}, fh)
         os.rename(root, os.path.join(DATA, tag))
@@ -205,9 +238,12 @@ def switch(tag):
 
 def update(repo, version):
     tag, web, sums = release(repo, version)
-    if not os.path.isfile(os.path.join(DATA, tag, "craft.json")):
-        shutil.rmtree(os.path.join(DATA, tag), ignore_errors=True)
+    site = os.path.join(DATA, tag)
+    if not os.path.isfile(os.path.join(site, "craft.json")):
+        shutil.rmtree(site, ignore_errors=True)
         install(repo, tag, web, sums)
+    elif not os.path.isfile(os.path.join(site, "icon.png")):
+        icon(repo, tag, site)  # unpacked before icons were fetched
     switch(tag)
 
 

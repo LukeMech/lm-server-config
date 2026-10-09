@@ -41,7 +41,7 @@ containers together. The quadlets live in one folder per service:
 | immich | `immich-pod` | server, machine-learning, postgres, valkey | immich → `:2283` |
 | remote | `remote-pod` | guacamole, guacd, postgres | remote → `:8443` |
 | sugar | `sugar-pod` | nightscout, mongo | sugar → `:1337` |
-| storytold | `storytold-pod` | hub + pdf, photo, vector, film, light, effect, design (lm-server-craft) | edit → `:6700` |
+| storytold | `storytold-pod` | hub + pdf, photo, vector, film, light, effect, design, word, deck, grid, cad, sound (lm-server-craft) | edit → `:6700` |
 
 Every quadlet has to name a container image; there's no multi-container compose
 file. The pod is what makes a service one unit, and the containers inside it
@@ -50,7 +50,7 @@ talk over `127.0.0.1`. Two images are our own:
   sites. It clones the site repo at start (private ones with the token), pulls
   every 3 minutes, and restarts on a new commit.
 - [`lm-server-craft`](images/craft): the [Storytold Crafting Apps](https://getartcraft.com/apps)
-  (PdfCraft, PhotoCraft, ...), static WebAssembly sites with no server side.
+  (PdfCraft, PhotoCraft, WordCraft, ...), static WebAssembly sites with no server side.
   Each container downloads its app's web build from the app's GitHub release,
   checks it against the release's `SHA256SUMS.txt`, serves it with nginx and
   swaps in a new release within 6 hours of it coming out.

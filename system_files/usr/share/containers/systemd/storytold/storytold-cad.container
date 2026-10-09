@@ -1,16 +1,16 @@
 [Unit]
-Description=storytold: storytold-hub
+Description=storytold: storytold-cad
 ConditionPathExists=/var/lib/lm-server/env/storytold/enabled
 
 [Container]
-ContainerName=storytold-hub
+ContainerName=storytold-cad
 Pod=storytold.pod
-# The page listing the apps + the proxy to them (see images/craft).
+# cadcraft's web build, downloaded from its GitHub release (see images/craft).
 Image=ghcr.io/lukemech/lm-server-craft:latest
 AutoUpdate=registry
-Environment=CRAFT_PORT=8080
-Environment="CRAFT_ROUTES=pdf=8081 photo=8082 vector=8083 film=8084 light=8085 effect=8086 design=8087 word=8088 deck=8089 grid=8090 cad=8091 sound=8092"
+Environment=CRAFT_REPO=storytold/cadcraft CRAFT_PORT=8091
 EnvironmentFile=/var/lib/lm-server/env/storytold/storytold.env
+Volume=/var/lib/lm-server/volumes/storytold/cad:/data:Z,U
 ReadOnly=true
 Tmpfs=/tmp
 DropCapability=ALL
@@ -19,6 +19,8 @@ NoNewPrivileges=true
 [Service]
 Slice=lm-server-storytold.slice
 Restart=always
+# No release to serve yet and GitHub unreachable: retry slowly, not in a loop.
+RestartSec=60
 TimeoutStartSec=900
 
 [Install]
