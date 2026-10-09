@@ -1,0 +1,6 @@
+# Reset through the chipset (port CF9) on reboot. With the default (ACPI,
+# then keyboard controller) the HP ProDesk hangs in a warm reboot: one beep,
+# then nothing until it's switched off and on by hand. reboot=efi is worse
+# (no reset at all). reboot=pci resets like a cold start.
+kargs = ["reboot=pci"]
+match-architectures = ["x86_64"]
