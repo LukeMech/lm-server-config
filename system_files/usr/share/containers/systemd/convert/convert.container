@@ -1,5 +1,7 @@
 # lm-server: description ConvertX
-# lm-server: route convert.lukemech.org http://localhost:3001
+# lm-server: route edit.lukemech.org/converter http://localhost:3001
+# Served under /converter/ of edit.lukemech.org, listed on its hub (storytold/).
+# lm-server: env WEBROOT=/converter
 # lm-server: env ACCOUNT_REGISTRATION=false
 # lm-server: env HTTP_ALLOWED=false
 # lm-server: require JWT_SECRET

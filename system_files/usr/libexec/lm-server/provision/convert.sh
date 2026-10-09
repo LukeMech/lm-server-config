@@ -8,7 +8,8 @@ set -euo pipefail
 
 ENVDIR="${LMS_ENV}/convert"
 USERS="${ENVDIR}/users.json"
-URL=http://127.0.0.1:3001
+# ConvertX answers under its WEBROOT (e.g. /converter), also locally.
+URL=http://127.0.0.1:3001$(sed -n 's/^WEBROOT=//p' "${ENVDIR}/convert.env")
 count=$(jq length "${USERS}")
 ((count > 0)) || exit 0
 
