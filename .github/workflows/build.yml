@@ -30,8 +30,9 @@ concurrency:
 jobs:
   # Rebuild the deps image first, in this very run (job deps), and build the
   # system image on it: on the schedule (a new kernel or driver -- published
-  # only then), and for a push that changed deps/ or build-deps.yml (a new
-  # branch counts what it changed against the default branch).
+  # only then), when run by hand (catch up with AlmaLinux's kernel now), and
+  # for a push that changed deps/ or build-deps.yml (a new branch counts what
+  # it changed against the default branch).
   changes:
     name: Check for deps changes
     runs-on: ubuntu-latest
@@ -43,7 +44,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Schedule, or deps/ changed since the previous push
+      - name: Schedule, by hand, or deps/ changed since the previous push
         id: diff
         env:
           EVENT: ${{ github.event_name }}
@@ -51,7 +52,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          if [[ "${EVENT}" == "schedule" ]]; then
+          if [[ "${EVENT}" == "schedule" || "${EVENT}" == "workflow_dispatch" ]]; then
             echo "deps=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

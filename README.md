@@ -159,8 +159,10 @@ version and the container toolkit. The system image swaps the base image's
 kernel for exactly that one ([00-pre-build.sh](build_files/00-pre-build.sh), before anything else in the build) and
 installs the rest ([40-nvidia.sh](build_files/40-nvidia.sh)), so module and
 kernel always match. The deps image is rebuilt by the system image's
-build itself, first, in the same run: on a change in `deps/` and on its
-two-weekly schedule (publishing then only a new kernel or driver).
+build itself, first, in the same run: on a change in `deps/`, on its
+two-weekly schedule (publishing then only a new kernel or driver), and when
+*Build system image* is run by hand (Actions > Run workflow) -- to pick up
+AlmaLinux's newest kernel without waiting for the schedule.
 
 Containers get it through CDI: `nvidia-cdi-refresh` writes `/run/cdi/nvidia.yaml`
 at every boot (only with the card present) and lets containers use
