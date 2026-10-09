@@ -1,0 +1,25 @@
+[Unit]
+Description=storytold: storytold-hub
+ConditionPathExists=/var/lib/lm-server/env/storytold/enabled
+
+[Container]
+ContainerName=storytold-hub
+Pod=storytold.pod
+# The page listing the apps + the proxy to them (see images/craft).
+Image=ghcr.io/lukemech/lm-server-craft:latest
+AutoUpdate=registry
+Environment=CRAFT_PORT=8080
+Environment="CRAFT_ROUTES=pdf=8081 photo=8082 vector=8083 film=8084 light=8085 effect=8086 design=8087"
+EnvironmentFile=/var/lib/lm-server/env/storytold/storytold.env
+ReadOnly=true
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Slice=lm-server-storytold.slice
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=storytold-pod.service

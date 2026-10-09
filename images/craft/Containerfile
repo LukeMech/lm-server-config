@@ -1,0 +1,32 @@
+# ghcr.io/lukemech/lm-server-craft -- static web builds of the Storytold
+# Crafting Apps (github.com/storytold: pdfcraft, photocraft, ...) and the hub
+# page that lists them. No app in the image: the entrypoint downloads the
+# app's `<name>-web-<version>.zip` from its GitHub release at start, checks it
+# against the release's SHA256SUMS.txt, serves it with nginx and swaps in a
+# new release when one comes out (see entrypoint.py).
+FROM docker.io/library/almalinux:10-minimal
+
+# nginx-core: the server without the default site and its extras. python3:
+# the entrypoint (GitHub API, download, checksum, unzip).
+RUN microdnf -y install --setopt=install_weak_deps=0 --nodocs \
+        nginx-core \
+        python3 \
+    && microdnf -y clean all
+
+# Browsers only stream-compile WebAssembly served as application/wasm, and
+# the apps are precompressed for gzip_static.
+RUN grep -q 'application/wasm' /etc/nginx/mime.types \
+    && nginx -V 2>&1 | grep -q -- '--with-http_gzip_static_module'
+
+COPY hub/ /usr/share/lm-server-craft/hub/
+COPY entrypoint.py /usr/local/bin/lm-server-craft
+RUN chmod 0755 /usr/local/bin/lm-server-craft \
+    && python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' /usr/local/bin/lm-server-craft \
+    && mkdir -p /data && chown nginx:nginx /data
+
+ENV PYTHONUNBUFFERED=1
+# nginx's master as root would switch its workers to another user, which
+# needs capabilities the quadlets drop. As nginx it serves as is (ports > 1024).
+USER nginx
+VOLUME ["/data"]
+ENTRYPOINT ["/usr/local/bin/lm-server-craft"]

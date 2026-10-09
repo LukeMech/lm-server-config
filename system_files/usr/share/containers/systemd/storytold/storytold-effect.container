@@ -1,0 +1,27 @@
+[Unit]
+Description=storytold: storytold-effect
+ConditionPathExists=/var/lib/lm-server/env/storytold/enabled
+
+[Container]
+ContainerName=storytold-effect
+Pod=storytold.pod
+# effectcraft's web build, downloaded from its GitHub release (see images/craft).
+Image=ghcr.io/lukemech/lm-server-craft:latest
+AutoUpdate=registry
+Environment=CRAFT_REPO=storytold/effectcraft CRAFT_PORT=8086
+EnvironmentFile=/var/lib/lm-server/env/storytold/storytold.env
+Volume=/var/lib/lm-server/volumes/storytold/effect:/data:Z,U
+ReadOnly=true
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Slice=lm-server-storytold.slice
+Restart=always
+# No release to serve yet and GitHub unreachable: retry slowly, not in a loop.
+RestartSec=60
+TimeoutStartSec=900
+
+[Install]
+WantedBy=storytold-pod.service

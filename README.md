@@ -37,20 +37,33 @@ containers together. The quadlets live in one folder per service:
 | toolbox | `toolbox` | lm-server-webapp | toolbox → `:6600` |
 | website | `website` | lm-server-webapp | lukemech.org → `:3000` |
 | exp | `exp` | lm-server-webapp (+ RenderCV) | exp → `:7999` |
-| convert | `convert` | convertx | convert → `:3001` |
+| convert | `convert` | convertx | edit/converter → `:3001` |
 | immich | `immich-pod` | server, machine-learning, postgres, valkey | immich → `:2283` |
 | remote | `remote-pod` | guacamole, guacd, postgres | remote → `:8443` |
 | sugar | `sugar-pod` | nightscout, mongo | sugar → `:1337` |
+| storytold | `storytold-pod` | hub + pdf, photo, vector, film, light, effect, design (lm-server-craft) | edit → `:6700` |
 
 Every quadlet has to name a container image; there's no multi-container compose
 file. The pod is what makes a service one unit, and the containers inside it
-talk over `127.0.0.1`. Only [`lm-server-webapp`](images/webapp) is our own image:
-a generic runner for the three Flask sites. It clones the site repo at start
-(private ones with the token), pulls every 3 minutes, and restarts on a new
-commit. Everything else is an upstream image.
+talk over `127.0.0.1`. Two images are our own:
+- [`lm-server-webapp`](images/webapp): a generic runner for the three Flask
+  sites. It clones the site repo at start (private ones with the token), pulls
+  every 3 minutes, and restarts on a new commit.
+- [`lm-server-craft`](images/craft): the [Storytold Crafting Apps](https://getartcraft.com/apps)
+  (PdfCraft, PhotoCraft, ...), static WebAssembly sites with no server side.
+  Each container downloads its app's web build from the app's GitHub release,
+  checks it against the release's `SHA256SUMS.txt`, serves it with nginx and
+  swaps in a new release within 6 hours of it coming out.
+  `<APP>CRAFT_VERSION = "0.4.0"` (e.g. `pdfcraft_version`) in `[storytold]`
+  pins one. The hub container serves the page at `edit.lukemech.org/` that
+  lists them (and the converter) and proxies `/<app>/` to each app.
+
+Everything else is an upstream image.
 
 **Cloudflare Tunnel routes**: set these in the dashboard. `lm-server services routes`
-prints the same table.
+prints the same table. A route with a path goes in as the hostname plus Path
+`^/<path>(/|$)` (a regex), and it must be listed above the same hostname's
+route without a path: the first matching route wins.
 
 | Hostname | Service |
 |---|---|
@@ -60,7 +73,8 @@ prints the same table.
 | toolbox.lukemech.org | `http://localhost:6600` |
 | lukemech.org | `http://localhost:3000` |
 | exp.lukemech.org | `http://localhost:7999` |
-| convert.lukemech.org | `http://localhost:3001` |
+| edit.lukemech.org/converter | `http://localhost:3001` |
+| edit.lukemech.org | `http://localhost:6700` |
 | immich.lukemech.org | `http://localhost:2283` |
 | remote.lukemech.org | `http://localhost:8443` |
 | sugar.lukemech.org | `http://localhost:1337` |
@@ -351,7 +365,7 @@ system_files/                          copied onto / of the system image
   usr/libexec/lm-server/provision/     creates users (APIs / SQL / CLI) on config change
   usr/share/cockpit/lm-server/         the Cockpit page
   usr/bin/lm-server                    the CLI
-images/webapp/                         our own service image
+images/webapp/, images/craft/          our own service images
 iso/                                   installer ISO: Anaconda as a bootable container
                                        (+ kickstart), built with image-builder
 lm-server-config-secrets/                     TEMPLATE of the private secrets repo
@@ -418,7 +432,7 @@ What lm-server reads from the folder:
 - **data folders**: every `Volume=/var/lib/lm-server/volumes/<name>/...`.
 - **directives** in comments:
   - `# lm-server: description <text>`
-  - `# lm-server: route <host> <url>`
+  - `# lm-server: route <host>[/<path>] <url>`
   - `# lm-server: env KEY=default` (`{{github_token}}` / `{{github_user}}` are
     filled in with the setup credentials)
   - `# lm-server: require KEY` (must be set in lm-server.toml)

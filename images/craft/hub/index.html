@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>edit.lukemech.org</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d5dfc'/%3E%3Cpath d='M9 23l9-14 5 8-3 0 3 6z' fill='white'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #f6f6f8; --surface: #ffffff; --text: #17171c; --muted: #66667a;
+      --line: #e4e4ea; --chip: #efeff4; --ok: #1f9d55; --off: #a0a0ad;
+      --shadow: 0 1px 2px rgba(20, 20, 40, .06), 0 8px 24px rgba(20, 20, 40, .06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111114; --surface: #1a1a1f; --text: #ececf1; --muted: #9b9bab;
+        --line: #2a2a32; --chip: #24242b; --ok: #3fcf7f; --off: #5c5c68;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 72px; }
+    header { margin-bottom: 40px; }
+    .eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; margin: 8px 0 12px; letter-spacing: -.02em; }
+    header p { color: var(--muted); margin: 0; max-width: 60ch; }
+    h2 {
+      font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .08em;
+      text-transform: uppercase; margin: 40px 0 16px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+    a.card {
+      display: flex; flex-direction: column; gap: 14px; padding: 20px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+      color: inherit; text-decoration: none; box-shadow: var(--shadow);
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    a.card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    a.card.off { opacity: .55; }
+    .top { display: flex; align-items: center; gap: 12px; }
+    .icon {
+      width: 44px; height: 44px; border-radius: 12px; flex: none;
+      display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+    .name { font-weight: 650; font-size: 17px; }
+    .num { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .desc { color: var(--muted); margin: 0; flex: 1; }
+    .foot { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .chip { background: var(--chip); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+    .ok .dot { background: var(--ok); }
+    .open { margin-left: auto; font-weight: 600; color: var(--accent); }
+    footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+    footer a { color: inherit; }
+    @media (max-width: 480px) { main { padding: 32px 16px 48px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">edit.lukemech.org</div>
+    <h1>Editors &amp; tools</h1>
+    <p>Open-source creative apps. The Crafting Apps run entirely in the browser: your files stay on your device.</p>
+  </header>
+
+  <h2>Crafting Apps</h2>
+  <div class="grid" id="crafts"></div>
+
+  <h2>Tools</h2>
+  <div class="grid" id="tools"></div>
+
+  <footer>
+    Crafting Apps by <a href="https://github.com/storytold" rel="noopener">Storytold</a> &middot;
+    ConvertX by <a href="https://github.com/C4illin/ConvertX" rel="noopener">C4illin</a>
+  </footer>
+</main>
+
+<script>
+  // path: where the app lives under this site. craft: a Storytold app (its
+  // container serves craft.json with the version). The others are only
+  // checked for an answer.
+  const APPS = [
+    { path: "pdf",    name: "PdfCraft",    desc: "PDF workbench: read, organize, combine, split and secure documents.", c: ["#e5484d", "#f76b15"], craft: true },
+    { path: "photo",  name: "PhotoCraft",  desc: "Image editor with layers, masks, adjustments and brushes.",           c: ["#3e63dd", "#0090ff"], craft: true },
+    { path: "vector", name: "VectorCraft", desc: "Vector illustration: paths, shapes, type and artboards.",              c: ["#f5a524", "#e5484d"], craft: true },
+    { path: "film",   name: "FilmCraft",   desc: "Non-linear video editing on a timeline.",                              c: ["#8e4ec6", "#3e63dd"], craft: true },
+    { path: "light",  name: "LightCraft",  desc: "Photo library and raw developer.",                                     c: ["#12a594", "#3e63dd"], craft: true },
+    { path: "effect", name: "EffectCraft", desc: "Motion graphics and visual effects.",                                  c: ["#d6409f", "#8e4ec6"], craft: true },
+    { path: "design", name: "DesignCraft", desc: "Page layout and publishing.",                                          c: ["#e54666", "#d6409f"], craft: true },
+  ];
+  const TOOLS = [
+    { path: "converter", name: "Converter", desc: "Convert files between formats: images, video, audio, documents and more (ConvertX).", c: ["#30a46c", "#12a594"] },
+  ];
+
+  function card(app, i) {
+    const a = document.createElement("a");
+    a.className = "card";
+    a.href = `./${app.path}/`;
+    a.style.setProperty("--accent", app.c[0]);
+    a.style.setProperty("--accent2", app.c[1]);
+    a.innerHTML = `
+      <div class="top">
+        <div class="icon" aria-hidden="true"></div>
+        <div class="name"></div>
+        <div class="num">${String(i + 1).padStart(2, "0")}</div>
+      </div>
+      <p class="desc"></p>
+      <div class="foot">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="chip status">checking&hellip;</span>
+        <span class="open">Open &rarr;</span>
+      </div>`;
+    a.querySelector(".icon").textContent = app.name.slice(0, app.name.endsWith("Craft") ? -5 : undefined).slice(0, 2);
+    a.querySelector(".name").textContent = app.name;
+    a.querySelector(".desc").textContent = app.desc;
+    probe(app, a);
+    return a;
+  }
+
+  async function probe(app, a) {
+    const status = a.querySelector(".status");
+    try {
+      const url = app.craft ? `./${app.path}/craft.json` : `./${app.path}/`;
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      status.textContent = app.craft ? `v${(await r.json()).version}` : "online";
+      a.classList.add("ok");
+    } catch {
+      status.textContent = "unavailable";
+      a.classList.add("off");
+    }
+  }
+
+  document.getElementById("crafts").append(...APPS.map(card));
+  document.getElementById("tools").append(...TOOLS.map(card));
+</script>
+</body>
+</html>

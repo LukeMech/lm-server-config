@@ -1,0 +1,21 @@
+# lm-server: description Storytold Crafting Apps (edit.lukemech.org)
+# lm-server: route edit.lukemech.org http://localhost:6700
+# One unit for the whole service: `lm-server services restart storytold`
+# restarts the hub and every app together. The hub (storytold-hub) answers on
+# the published port and proxies /<app>/ to the app's container on the pod's
+# 127.0.0.1. /converter is ConvertX, routed by the tunnel (see convert/).
+[Unit]
+Description=storytold: Storytold Crafting Apps
+ConditionPathExists=/var/lib/lm-server/env/storytold/enabled
+RequiresMountsFor=/var/lib/lm-server/volumes/storytold
+
+[Pod]
+PodName=storytold
+Network=storytold.network
+PublishPort=127.0.0.1:6700:8080
+# Own user namespace for all of its containers: their users are unprivileged
+# uids on the host.
+UserNS=auto
+
+[Service]
+Slice=lm-server-storytold.slice

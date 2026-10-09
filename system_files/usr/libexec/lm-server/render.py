@@ -22,7 +22,7 @@ Everything lm-server needs to know about it comes from those files:
     unit        <name>-pod if there's a <name>.pod, else its .container(s)
     volumes     subdirectories, from `Volume=/var/lib/lm-server/volumes/<name>/<sub>:...`
     # lm-server: description <text>
-    # lm-server: route <hostname> <url>        (Cloudflare route; repeatable)
+    # lm-server: route <hostname>[/<path>] <url>  (Cloudflare route; repeatable)
     # lm-server: env <KEY>=<default value>     (repeatable)
     # lm-server: require <KEY>                 (must be set in lm-server.toml)
 

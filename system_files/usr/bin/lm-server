@@ -911,6 +911,7 @@ cmd_routes() {
     done < <(lms_catalog)
     echo
     echo "https://localhost:9090 (Cockpit) needs TLS verification disabled on the route."
+    echo "<host>/<path>: hostname <host>, Path ^/<path>(/|\$), listed above <host>'s route without a path."
 }
 
 # ------------------------------------------------------------------ status/updates

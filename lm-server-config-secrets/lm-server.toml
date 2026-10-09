@@ -148,6 +148,16 @@ users = [{ login = "lukasz", password = "CHANGE_ME", admin = true }]
 # major needs a dump/restore.
 # versions = { db = "16", guacamole = "1.6.0", guacd = "1.6.0" }
 
+[storytold]
+# The Crafting Apps at edit.lukemech.org/<app>/: their web builds (~1 GB with
+# the previous release of each kept). The apps run in the browser.
+storage = "2G"
+cpus = 1
+memory = "512M"
+# Each follows its latest GitHub release; pin one with <app>craft_version:
+# pdfcraft_version = "0.4.0"
+# versions = { hub = "latest", pdf = "latest" }
+
 [sugar]
 storage = "5G" # Nightscout's MongoDB
 cpus = 1
