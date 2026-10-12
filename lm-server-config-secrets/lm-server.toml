@@ -84,7 +84,7 @@ shares = ["files"]
 syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }
 # More FileBrowser users:
 # users = [ { login = "jan", password = "CHANGE_ME" } ]
-# versions = { filebrowser = "latest", syncthing = "latest" }
+# versions = { filebrowser = "2-stable", syncthing = "latest" }
 
 # Web apps: repo/port are built in; the code is cloned with the GitHub token
 # from `lm-server config setup`. Optional: branch = "...", github_token = "...".

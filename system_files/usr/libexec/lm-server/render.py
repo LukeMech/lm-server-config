@@ -378,13 +378,25 @@ def r_disks(name, spec, sec, out, ctx):
 """
         for s in shares
     )
+    # FileBrowser 2 keeps its data in SQLite. Its 1.x database (BoltDB,
+    # database.db) is imported once, on the first start without the SQLite
+    # file -- migrateFrom is only set while that file is there: it's an error
+    # when it points at nothing. It's kept as the backup of the 1.x data.
+    legacy = f"{VOLUMES}/{name}/app/filebrowser/database.db"
+    migrate = (
+        '    migrateFrom: "/home/filebrowser/data/database.db"\n'
+        if os.path.isfile(legacy) and os.path.getsize(legacy) > 0
+        else ""
+    )
     out.write(
         "filebrowser/config.yaml",
-        f"""server:
+        f"""http:
   port: 80
   baseURL: "/"
-  database: /home/filebrowser/data/database.db
-  sources:
+server:
+  database:
+    path: /home/filebrowser/data/database.sqlite
+{migrate}  sources:
 {sources}auth:
   adminUsername: {q(admin)}
   adminPassword: {q(need(sec, "filebrowser_password", name))}

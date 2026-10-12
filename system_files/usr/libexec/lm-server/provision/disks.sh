@@ -70,7 +70,7 @@ count=$(jq length "${ENVDIR}/filebrowser-users.json")
 ((count > 0)) || exit 0
 
 image=$(podman inspect filebrowser --format '{{.ImageName}}' 2>/dev/null ||
-    echo ghcr.io/gtsteffaniak/filebrowser:latest)
+    echo ghcr.io/gtsteffaniak/filebrowser:2-stable)
 systemctl stop filebrowser.service
 trap 'systemctl start --no-block filebrowser.service' EXIT
 for ((i = 0; i < count; i++)); do
@@ -81,7 +81,7 @@ for ((i = 0; i < count; i++)); do
         -v "${ENVDIR}/filebrowser:/home/filebrowser/config:ro,Z" \
         -v "${LMS_VOLUMES}/disks/app/filebrowser:/home/filebrowser/data:Z" \
         --entrypoint ./filebrowser "${image}" \
-        set -u "${login},${pass}" -c /home/filebrowser/config/config.yaml ||
+        user set "${login}" --password "${pass}" -c /home/filebrowser/config/config.yaml ||
         lms_log "disks: filebrowser user ${login} failed"
 done
 lms_log "disks: ${count} filebrowser user(s) set"
