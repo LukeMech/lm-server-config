@@ -41,7 +41,7 @@ containers together. The quadlets live in one folder per service:
 | immich | `immich-pod` | server, machine-learning, postgres, valkey | immich → `:2283` |
 | remote | `remote-pod` | guacamole, guacd, postgres | remote → `:8443` |
 | sugar | `sugar-pod` | nightscout, mongo | sugar → `:1337` |
-| storytold | `storytold-pod` | hub + pdf, photo, vector, film, light, effect, design, word, deck, grid, cad, sound (lm-server-craft) | edit → `:6700` |
+| storytold | `storytold-pod` | hub + pdf, photo, vector, film, light, effect, design, word, deck, grid, cad, sound, fig (lm-server-craft) | edit → `:6700` |
 
 Every quadlet has to name a container image; there's no multi-container compose
 file. The pod is what makes a service one unit, and the containers inside it

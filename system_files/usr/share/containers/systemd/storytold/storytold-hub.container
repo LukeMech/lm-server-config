@@ -9,7 +9,7 @@ Pod=storytold.pod
 Image=ghcr.io/lukemech/lm-server-craft:latest
 AutoUpdate=registry
 Environment=CRAFT_PORT=8080
-Environment="CRAFT_ROUTES=pdf=8081 photo=8082 vector=8083 film=8084 light=8085 effect=8086 design=8087 word=8088 deck=8089 grid=8090 cad=8091 sound=8092"
+Environment="CRAFT_ROUTES=pdf=8081 photo=8082 vector=8083 film=8084 light=8085 effect=8086 design=8087 word=8088 deck=8089 grid=8090 cad=8091 sound=8092 fig=8093"
 EnvironmentFile=/var/lib/lm-server/env/storytold/storytold.env
 ReadOnly=true
 Tmpfs=/tmp

@@ -74,7 +74,7 @@
   <footer>
     Crafting Apps by <a href="https://github.com/storytold" rel="noopener">Storytold</a> &middot;
     ConvertX by <a href="https://github.com/C4illin/ConvertX" rel="noopener">C4illin</a> &middot;
-    product names are trademarks of their owners, named only for comparison.
+    the misspelled names are a nod to the usual suites, not affiliation.
   </footer>
 </main>
 
@@ -83,23 +83,24 @@
   // container serves craft.json (version) and icon.png (from the app's repo).
   // The others are only checked for an answer.
   const GROUPS = [
-    { title: "Adobe", note: "Creative Cloud alternatives", apps: [
-      { path: "photo",  name: "PhotoCraft",  alt: "Adobe Photoshop",   desc: "Image editing with layers, masks, adjustments and brushes.", c: "#2f6fe4", craft: true },
-      { path: "vector", name: "VectorCraft", alt: "Adobe Illustrator", desc: "Vector illustration: paths, shapes, type and artboards.",    c: "#e08a1e", craft: true },
-      { path: "light",  name: "LightCraft",  alt: "Adobe Lightroom",   desc: "Photo library and raw developer.",                           c: "#12a594", craft: true },
-      { path: "design", name: "DesignCraft", alt: "Adobe InDesign",    desc: "Page layout and publishing.",                                c: "#e54666", craft: true },
-      { path: "film",   name: "FilmCraft",   alt: "Adobe Premiere Pro", desc: "Non-linear video editing on a timeline.",                   c: "#8e4ec6", craft: true },
-      { path: "effect", name: "EffectCraft", alt: "Adobe After Effects", desc: "Motion graphics and visual effects.",                       c: "#6e56cf", craft: true },
-      { path: "pdf",    name: "PdfCraft",    alt: "Adobe Acrobat",     desc: "PDF workbench: read, organize, combine, split and secure.",  c: "#e5484d", craft: true },
+    { title: "Ad0be", note: "Creative Cl0ud alternatives", apps: [
+      { path: "photo",  name: "PhotoCraft",  alt: "Ad0be Ph0toshop",   desc: "Image editing with layers, masks, adjustments and brushes.", c: "#2f6fe4", craft: true },
+      { path: "vector", name: "VectorCraft", alt: "Ad0be Illu$trator", desc: "Vector illustration: paths, shapes, type and artboards.",    c: "#e08a1e", craft: true },
+      { path: "light",  name: "LightCraft",  alt: "Ad0be Lightr00m",   desc: "Photo library and raw developer.",                           c: "#12a594", craft: true },
+      { path: "design", name: "DesignCraft", alt: "Ad0be InDe$ign",    desc: "Page layout and publishing.",                                c: "#e54666", craft: true },
+      { path: "film",   name: "FilmCraft",   alt: "Ad0be Premi3re Pro", desc: "Non-linear video editing on a timeline.",                   c: "#8e4ec6", craft: true },
+      { path: "effect", name: "EffectCraft", alt: "Ad0be After Eff3cts", desc: "Motion graphics and visual effects.",                       c: "#6e56cf", craft: true },
+      { path: "pdf",    name: "PdfCraft",    alt: "Ad0be Acr0bat",     desc: "PDF workbench: read, organize, combine, split and secure.",  c: "#e5484d", craft: true },
     ]},
-    { title: "Office", note: "Microsoft 365 alternatives", apps: [
-      { path: "word", name: "WordCraft", alt: "Microsoft Word",       desc: "Word processor for documents and reports.", c: "#2b5797", craft: true },
-      { path: "grid", name: "GridCraft", alt: "Microsoft Excel",      desc: "Spreadsheets: formulas, tables and charts.", c: "#1e8e4f", craft: true },
-      { path: "deck", name: "DeckCraft", alt: "Microsoft PowerPoint", desc: "Presentations and slide shows.",             c: "#d35230", craft: true },
+    { title: "Office", note: "Micro$oft 365 alternatives", apps: [
+      { path: "word", name: "WordCraft", alt: "Micro$oft W0rd",       desc: "Word processor for documents and reports.", c: "#2b5797", craft: true },
+      { path: "grid", name: "GridCraft", alt: "Micro$oft Exc3l",      desc: "Spreadsheets: formulas, tables and charts.", c: "#1e8e4f", craft: true },
+      { path: "deck", name: "DeckCraft", alt: "Micro$oft P0werPoint", desc: "Presentations and slide shows.",             c: "#d35230", craft: true },
     ]},
-    { title: "Autodesk & Avid", note: "engineering and audio", apps: [
-      { path: "cad",   name: "CADCraft",   alt: "Autodesk AutoCAD", desc: "Computer-aided design and drafting.",      c: "#c7303a", craft: true },
-      { path: "sound", name: "SoundCraft", alt: "Avid Pro Tools",   desc: "Multitrack audio recording and mixing.", c: "#5b5bd6", craft: true },
+    { title: "Autode$k, Av1d & Figm@", note: "engineering, audio and UI design", apps: [
+      { path: "cad",   name: "CADCraft",   alt: "Autode$k AutoC4D", desc: "Computer-aided design and drafting.",      c: "#c7303a", craft: true },
+      { path: "sound", name: "SoundCraft", alt: "Av1d Pro T00ls",   desc: "Multitrack audio recording and mixing.", c: "#5b5bd6", craft: true },
+      { path: "fig",   name: "FigCraft",   alt: "Figm@",            desc: "Interface design and prototyping.",      c: "#a259ff", craft: true },
     ]},
     { title: "Tools", note: "on this server", apps: [
       { path: "converter", name: "Converter", alt: "ConvertX", desc: "Convert files between formats: images, video, audio, documents and more. Files are uploaded to this server; sign-in required.", c: "#30a46c" },
