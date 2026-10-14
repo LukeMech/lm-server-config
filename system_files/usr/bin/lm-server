@@ -725,10 +725,28 @@ apply_quadlets() {
     ((!reload)) || systemctl daemon-reload
 }
 
+# volumes_ensure <svc>: the data subfolders its quadlets mount
+# (Volume=/var/lib/lm-server/volumes/<svc>/<sub>:...) -- podman doesn't create
+# a missing one, the container just fails (exit 125). A sync makes them as it
+# applies the config, but a quadlet new in this image starts at boot, before
+# the next sync gets through: so straight from the quadlets, at every start.
+volumes_ensure() {
+    local svc=$1 vol="${LMS_VOLUMES}/$1" d
+    # Its own filesystem or bind mount: inside it, not on the system disk under it
+    if [[ -f ${LMS_ENV}/${svc}/storage || -f ${LMS_ENV}/${svc}/disk ]]; then
+        systemctl start "$(systemd-escape -p --suffix=mount "${vol}")" || return 0
+    fi
+    sed -n "s|^Volume=${vol}/\([^:]*\):.*|\1|p" /usr/share/containers/systemd/"${svc}"/*.container 2>/dev/null |
+        while IFS= read -r d; do
+            if [[ -n ${d} ]]; then mkdir -p "${vol}/${d}"; fi
+        done
+}
+
 cmd_start_enabled() {
     local svc
     for svc in $(lms_services); do
         lms_enabled "${svc}" || continue
+        volumes_ensure "${svc}" || lms_log "${svc}: warning: its data folders could not be created"
         mapfile -t units < <(lms_units "${svc}")
         systemctl start --no-block "${units[@]}"
         # Provisioning that didn't get through (the app wasn't up yet, ...)
@@ -871,6 +889,7 @@ cmd_unit_action() {
     if [[ ${action} != stop ]] && ! lms_enabled "${svc}"; then
         lms_die "${svc} has no config (add [${svc}] to ${LMS_CONFIG_FILE})"
     fi
+    [[ ${action} == stop ]] || volumes_ensure "${svc}" || lms_log "${svc}: warning: its data folders could not be created"
     systemctl "${action}" "${units[@]}"
 }
 
