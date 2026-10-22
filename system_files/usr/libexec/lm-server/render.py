@@ -368,11 +368,31 @@ def r_disks(name, spec, sec, out, ctx):
                 f"{', '.join(shares)}; no spaces)"
             )
         folders[fid] = f"/shares/{rel}"
+    # The share FileBrowser opens at (its first source; /files/ goes there).
+    default = sec.get("default_share", shares[0])
+    if default not in shares:
+        raise ConfigError(f"{name}.default_share: '{default}' isn't one of {', '.join(shares)}")
+    shares = [default] + [s for s in shares if s != default]
+    # The name of each share in FileBrowser (its URLs: /files/<name>/...).
+    # "files" is no good there: 2.0.x mistakes it for the /files/ route and
+    # drops it from some requests ("source name not found"), so that share is
+    # "disk" unless share_names says otherwise. Users and shares in its
+    # database point at the path, so a rename only changes the URLs.
+    fb_names = {s: "disk" if s == "files" else s for s in shares}
+    for s, n in sec.get("share_names", {}).items():
+        if s not in shares:
+            raise ConfigError(f"{name}.share_names: '{s}' isn't one of {', '.join(shares)}")
+        fb_names[s] = n
+    names = list(fb_names.values())
+    if len(set(names)) != len(names) or not all(
+        isinstance(n, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", n) and n not in (".", "..", "files") for n in names
+    ):
+        raise ConfigError(f'{name}.share_names: distinct names (letters, digits, _.-), not "files"')
     admin = need(sec, "filebrowser_admin", name)
     q = json.dumps  # a JSON string is a valid YAML scalar
     sources = "".join(
         f"""    - path: {q("/shares/" + s)}
-      name: {q(s)}
+      name: {q(fb_names[s])}
       config:
         defaultEnabled: true
 """

@@ -79,6 +79,11 @@ syncthing_password = "CHANGE_ME"
 # disk: shares/<name> in its data, next to the apps' own state in app/.
 # One share keeps everything in one tree (docs in files/docs).
 shares = ["files"]
+# The share FileBrowser opens at (default: the first one), and its names in
+# FileBrowser, i.e. its URLs /files/<name>/... (default: the share's own name;
+# "disk" for "files", which FileBrowser mixes up with its /files/ route).
+default_share = "files"
+# share_names = { files = "disk" }
 # Syncthing folders as <share>/<path>; created if missing. Use the folder IDs
 # your devices already share.
 syncthing_folders = { keepass = "files/Keepass", sync = "files/Sync" }

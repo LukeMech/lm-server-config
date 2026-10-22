@@ -213,7 +213,7 @@ deleted automatically.
 For `[disks]` the data looks like this, with `shares = ["files"]`:
 
 ```
-shares/files/     FileBrowser source "files" (Syncthing: files/Keepass,
+shares/files/     FileBrowser source "disk" (Syncthing: files/Keepass,
                   files/Sync; documents in files/docs)
 app/syncthing/    Syncthing config + keys (device ID)
 app/filebrowser/  FileBrowser database
@@ -222,6 +222,14 @@ app/filebrowser/  FileBrowser database
 Both containers see the shares as `/shares/<name>`; in `lm-server.toml` you
 only write `<share>/<folder>`. With `storage = "80G"`, FileBrowser shows 80 GB as
 its maximum.
+
+FileBrowser opens at `default_share` (default: the first share). Each share
+has a name in FileBrowser, which is what its URLs show (`/files/<name>/...`).
+That name is the share's own, except `files` becomes `disk`: FileBrowser 2.0
+confuses a source named `files` with its `/files/` route ("403: source name
+not found"). Set your own names with `share_names = { files = "storage" }`.
+Users and share links in FileBrowser's database refer to the folder, not the
+name, so renaming only changes the URLs.
 
 **What happens on a change** (e.g. `disk` from `/var/mnt/hdd-mirror/immich` to
 `/var/mnt/nvme/immich`):
