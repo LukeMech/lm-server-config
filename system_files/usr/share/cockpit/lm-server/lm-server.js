@@ -708,7 +708,7 @@ $("setup").addEventListener("submit", event => {
     const f = new FormData(form);
     // Empty fields keep the current setting (shown as the placeholder).
     const val = name => f.get(name) || form.elements[name].placeholder;
-    const args = ["setup", "--repo", val("repo"), "--branch", f.get("branch"), "--token-stdin", "--config", val("config")];
+    const args = ["config", "setup", "--repo", val("repo"), "--branch", f.get("branch"), "--token-stdin", "--config", val("config")];
     if (val("user")) args.push("--user", val("user"));
     const token = f.get("token") + "\n";
     form.elements.token.value = "";

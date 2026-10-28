@@ -144,7 +144,8 @@
             <textarea id="config-text" spellcheck="false" aria-label="lm-server.toml" hidden></textarea>
             <details class="setup">
                 <summary>Change repository or token…</summary>
-                <form id="setup">
+                <!-- No autofill: empty fields keep the current setting, a browser's guess would replace it -->
+                <form id="setup" autocomplete="off">
                     <label>Repository <input name="repo" placeholder="LukeMech/lm-server-config-secrets"></label>
                     <label>Branch <input name="branch" value="main" required></label>
                     <label>Config file (.toml) in the repo <input name="config" placeholder="lm-server.toml"></label>
