@@ -79,8 +79,9 @@ rm -rf /var/lib/dnf
 # at best install into a throwaway overlay. Without dnf nobody tries. Plain
 # `rpm -e`, no --nodeps: if anything else in the image still needs one of
 # these, the build fails here and says what. rpm itself stays (rpm -q, sos).
+# dnf-bootc: the base image's dnf plugin for bootc hosts, needs python3-dnf.
 dnf_pkgs=()
-for p in dnf dnf5 yum dnf-data dnf-automatic dnf-plugins-core python3-dnf \
+for p in dnf dnf5 yum dnf-data dnf-automatic dnf-plugins-core dnf-bootc python3-dnf \
     python3-dnf-plugins-core python3-libdnf python3-hawkey libdnf5 libdnf5-cli; do
     rpm -q "${p}" &>/dev/null && dnf_pkgs+=("${p}")
 done
