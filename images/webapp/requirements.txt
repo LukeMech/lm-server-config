@@ -11,4 +11,4 @@ gunicorn==26.2.0
 # exp (LukeMech/CV): rendercv renders the CV at every pull, pdf-compressor
 # (iLovePDF) shrinks it (the CV repo's compress.sh, from APP_BUILD_CMD).
 rendercv[full]==2.8
-pdf-compressor==0.4.0
+pdf-compressor==0.5.0
