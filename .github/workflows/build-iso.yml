@@ -37,7 +37,10 @@ concurrency:
 jobs:
   build:
     name: Build ISO
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: since it became 26.04 (Nov 2026) osbuild's bind
+    # mount of the container storage fails ("mount: /run/osbuild/containers/
+    # storage: permission denied") -- 24.04 builds the same pin fine.
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
