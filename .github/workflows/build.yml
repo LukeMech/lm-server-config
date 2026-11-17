@@ -199,10 +199,20 @@ jobs:
           TEST_MODE: ${{ steps.test-mode.outputs.test_mode }}
         run: |
           set -euox pipefail
+          # Push once, then add the other tags registry-side: every podman push
+          # recompresses the layers into a new manifest digest, so pushing per
+          # tag left :latest on a different (unsigned) digest than the one
+          # signed below.
+          FIRST=""
           for tag in $(just generate-build-tags "${DEFAULT_TAG}"); do
             if [[ "${TEST_MODE}" == "true" && "${tag}" != testing-* ]]; then continue; fi
-            podman tag "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_NAME}:${tag}"
-            podman push --digestfile=/tmp/digestfile "${IMAGE_NAME}:${tag}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+            if [[ -z "${FIRST}" ]]; then
+              FIRST="${tag}"
+              podman push --digestfile=/tmp/digestfile "${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+            else
+              skopeo copy --preserve-digests \
+                "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@$(< /tmp/digestfile)" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+            fi
           done
           echo "digest=$(< /tmp/digestfile)" >> "$GITHUB_OUTPUT"
 
