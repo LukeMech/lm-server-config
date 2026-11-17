@@ -82,7 +82,7 @@ REMOVE=(
 # Both images need these from the base image.
 KEEP=(
     bootc dracut clevis-dracut grub2-efi-x64 grub2-tools shim-x64 linux-firmware
-    realtek-firmware microcode_ctl NetworkManager podman sudo flashrom
+    realtek-firmware microcode_ctl NetworkManager podman sudo
 )
 
 installed=()
